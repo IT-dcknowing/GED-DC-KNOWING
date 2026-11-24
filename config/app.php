@@ -55,6 +55,12 @@ return [
     'url' => env('APP_URL', 'http://localhost'),
 
     /*
+    | Adresse de l'application React (dossier frontend/). Sert à construire les liens
+    | envoyés par e-mail, par exemple le lien de réinitialisation du mot de passe.
+    */
+    'frontend_url' => rtrim((string) env('FRONTEND_URL', 'http://localhost:5173'), '/'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
