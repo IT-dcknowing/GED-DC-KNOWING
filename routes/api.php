@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\V1\Admin\AuditLogController;
 use App\Http\Controllers\Api\V1\Admin\ReferenceController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\ClientController;
+use App\Http\Controllers\Api\V1\DepartmentController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\Api\V1\PasswordResetController;
@@ -34,6 +36,30 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     | puis permission propre à chaque route (règle E4).
     */
     Route::middleware(['auth:sanctum', 'account.active', 'password.changed'])->group(function () {
+        /*
+        | Départements (lot 1.3). Consultation selon le rôle (DepartmentPolicy, décision D1) ;
+        | écriture avec la permission departments.manage (D2), vérifiée aussi par la Policy.
+        */
+        Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
+        Route::get('/departments/{department}', [DepartmentController::class, 'show'])->name('departments.show');
+        Route::middleware('permission:departments.manage')->group(function () {
+            Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
+            Route::patch('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
+            Route::post('/departments/{department}/deactivate', [DepartmentController::class, 'deactivate'])->name('departments.deactivate');
+            Route::post('/departments/{department}/activate', [DepartmentController::class, 'activate'])->name('departments.activate');
+        });
+
+        /*
+        | Clients (lot 2.1). Consultation selon le périmètre du compte (ClientPolicy) ;
+        | écriture avec la permission clients.manage (Super Administrateur et Responsable GED).
+        */
+        Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
+        Route::get('/clients/{client}', [ClientController::class, 'show'])->name('clients.show');
+        Route::middleware('permission:clients.manage')->group(function () {
+            Route::post('/clients', [ClientController::class, 'store'])->name('clients.store');
+            Route::patch('/clients/{client}', [ClientController::class, 'update'])->name('clients.update');
+        });
+
         Route::prefix('admin')->name('admin.')->group(function () {
             Route::middleware('permission:users.manage')->group(function () {
                 Route::get('/users', [UserController::class, 'index'])->name('users.index');

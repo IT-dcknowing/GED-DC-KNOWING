@@ -291,13 +291,27 @@ const administration = folder(
             body: login('admin_email', 'admin_password'),
             tests: [status(200), profile('super_admin', false), "pm.collectionVariables.set('admin_id', pm.response.json().data.id);"].join('\n'),
         }),
-        request('05.2 Liste des rôles', 'GET', '/api/v1/admin/roles', {
+        request('05.2 Liste des rôles avec permissions et nombre de comptes', 'GET', '/api/v1/admin/roles', {
             tests: [
                 status(200),
-                test('Les 7 rôles avec leur libellé', [
+                test('Les 7 rôles avec libellé, description, permissions et nombre de comptes', [
                     '    const roles = pm.response.json().data;',
                     '    pm.expect(roles).to.have.lengthOf(7);',
-                    "    roles.forEach(r => pm.expect(r).to.have.all.keys('key', 'label'));",
+                    '    roles.forEach(r => {',
+                    "        pm.expect(r).to.have.all.keys('key', 'label', 'description', 'users_count', 'permissions');",
+                    "        pm.expect(r.description).to.be.a('string').and.not.empty;",
+                    "        pm.expect(r.users_count).to.be.a('number').and.at.least(0);",
+                    "        r.permissions.forEach(p => pm.expect(p).to.have.all.keys('key', 'label'));",
+                    '    });',
+                ].join('\n')),
+                test('Catalogue des 17 permissions, cohérent avec celles des rôles', [
+                    '    const body = pm.response.json();',
+                    '    const all = body.meta.permissions.map(p => p.key);',
+                    '    pm.expect(all).to.have.lengthOf(17);',
+                    '    body.data.forEach(r => r.permissions.forEach(p => pm.expect(all).to.include(p.key)));',
+                    "    const admin = body.data.find(r => r.key === 'super_admin');",
+                    '    pm.expect(admin.permissions, \'le Super Administrateur a toutes les permissions\').to.have.lengthOf(17);',
+                    "    pm.expect(admin.users_count, 'au moins le compte Postman').to.be.at.least(1);",
                 ].join('\n')),
             ].join('\n'),
         }),
@@ -313,6 +327,15 @@ const administration = folder(
                     "    pm.expect(u.email).to.eql(pm.environment.get('lockout_email'));",
                     "    pm.expect(u.locked_until, 'fin du verrouillage').to.be.a('string');",
                     "    pm.collectionVariables.set('lockout_user_id', u.id);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('05.4b Recherche : « % » cherché tel quel (A2)', 'GET', '/api/v1/admin/users?search=%25', {
+            description: 'Le caractère « % » saisi n\'est pas un joker : seuls les comptes dont le nom ou l\'adresse contient « % » sont renvoyés.',
+            tests: [
+                status(200),
+                test('Aucun compte renvoyé sans « % » dans son nom ou son adresse', [
+                    '    pm.response.json().data.forEach(u => pm.expect(u.name + u.email).to.include(\'%\'));',
                 ].join('\n')),
             ].join('\n'),
         }),
@@ -335,11 +358,21 @@ const administration = folder(
                     '    pm.expect(d.must_change_password).to.eql(true);',
                     "    pm.collectionVariables.set('created_user_id', d.id);",
                 ].join('\n')),
+                test('Créateur du compte renseigné (A4)', "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));"),
                 policyCheck('temporary_password'),
             ].join('\n'),
         }),
         request("05.8 Le mot de passe temporaire n'est plus renvoyé (B2)", 'GET', '/api/v1/admin/users/{{created_user_id}}', {
-            tests: [status(200), test('Aucun mot de passe dans la fiche', "    pm.expect(pm.response.text()).to.not.include('temporary_password');\n    pm.expect(pm.response.json().data).to.not.have.property('password');")].join('\n'),
+            tests: [
+                status(200),
+                test('Aucun mot de passe dans la fiche', "    pm.expect(pm.response.text()).to.not.include('temporary_password');\n    pm.expect(pm.response.json().data).to.not.have.property('password');"),
+                test('Date et auteur de la création affichés (A4)', [
+                    '    const d = pm.response.json().data;',
+                    "    pm.expect(d.created_at).to.be.a('string').and.not.empty;",
+                    "    pm.expect(d.created_by).to.have.all.keys('id', 'name');",
+                    "    pm.expect(String(d.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                ].join('\n')),
+            ].join('\n'),
         }),
         request('05.9 Changement de rôle (E3)', 'PATCH', '/api/v1/admin/users/{{created_user_id}}', {
             body: { role: 'stagiaire' },
@@ -350,6 +383,10 @@ const administration = folder(
         }),
         request('05.11 Interdiction de désactiver son propre compte (G1)', 'POST', '/api/v1/admin/users/{{admin_id}}/deactivate', {
             tests: [status(422), fieldError('user', 'propre compte')].join('\n'),
+        }),
+        request('05.11b Interdiction de modifier son propre rôle (A1)', 'PATCH', '/api/v1/admin/users/{{admin_id}}', {
+            body: { role: 'directeur' },
+            tests: [status(422), fieldError('role', 'Vous ne pouvez pas modifier votre propre rôle.')].join('\n'),
         }),
         request("05.12 Réactivation d'un compte", 'POST', '/api/v1/admin/users/{{created_user_id}}/activate', {
             tests: [status(200), test('Compte réactivé', '    pm.expect(pm.response.json().data.is_active).to.eql(true);')].join('\n'),
@@ -551,6 +588,447 @@ const audit = folder(
     ],
 );
 
+/* ------------------------------------------------- départements (lot 1.3) */
+
+const logout = (name) => request(name, 'POST', '/api/v1/auth/logout', { tests: status(204) });
+
+/** Entrée la plus récente du journal pour un événement de département, produite par cette exécution. */
+const departmentAuditEntry = (event, check) =>
+    [
+        status(200),
+        'const entry = pm.response.json().data[0] || {};',
+        test(`Entrée « ${event} » produite par cette exécution`, [
+            `    pm.expect(entry.event && entry.event.key).to.eql(${JSON.stringify(event)});`,
+            "    const start = pm.collectionVariables.get('run_started_at');",
+            '    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }',
+        ].join('\n')),
+        test('Auteur et département renseignés', [
+            "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+            "    pm.expect(entry.details.department.code).to.eql(pm.collectionVariables.get('dep_code'));",
+            check ?? '',
+        ].filter(Boolean).join('\n')),
+    ].join('\n');
+
+const departments = folder(
+    'DÉPARTEMENTS (lot 1.3)',
+    'Consultation selon le rôle (D1), gestion par le Super Administrateur (D2), responsable (D4), désactivation (D6), code (D7). '
+        + 'Les départements créés ici ont un code « PM-… », effacé à chaque remise à zéro des comptes de test.',
+    [
+        // Rend le dossier exécutable seul (option -i), sans dépendre du dossier 00 de l'authentification.
+        request('DEP.00 Cookie CSRF (Sanctum)', 'GET', '/sanctum/csrf-cookie', {
+            pre: "if (!pm.collectionVariables.get('run_started_at')) { pm.collectionVariables.set('run_started_at', new Date().toISOString()); }",
+            tests: [
+                status(204),
+                test('Jeton XSRF récupéré', "    pm.expect(pm.collectionVariables.get('xsrf_token')).to.be.a('string').and.not.empty;"),
+            ].join('\n'),
+        }),
+        request('DEP.00b Fermeture d\'une session précédente', 'POST', '/api/v1/auth/logout', {
+            tests: test('Aucune session ouverte après cette requête (204 ou 401)', '    pm.expect(pm.response.code).to.be.oneOf([204, 401]);'),
+        }),
+        request('DEP.01 Connexion du Directeur', 'POST', LOGIN, {
+            body: login('director_email', 'director_password'),
+            tests: [status(200), profile('directeur', false)].join('\n'),
+        }),
+        request('DEP.02 Liste de tous les départements (D1)', 'GET', '/api/v1/departments', {
+            tests: [
+                status(200),
+                test('Départements avec code, nom, état, responsable et nombre de collaborateurs actifs', [
+                    '    const list = pm.response.json().data;',
+                    "    pm.expect(list).to.be.an('array').that.is.not.empty;",
+                    "    list.forEach(d => pm.expect(d).to.include.all.keys('id', 'code', 'name', 'is_active', 'manager', 'active_members_count', 'created_at'));",
+                    "    list.forEach(d => pm.expect(d, 'pas de liste de membres dans la liste').to.not.have.property('members'));",
+                ].join('\n')),
+                test('Département de test présent, avec son responsable', [
+                    "    const dep = pm.response.json().data.find(d => d.code === 'DEP-TEST');",
+                    "    pm.expect(dep, 'DEP-TEST').to.be.an('object');",
+                    "    pm.expect(dep.manager.name).to.include('Responsable de Département');",
+                    "    pm.collectionVariables.set('dep_test_id', dep.id);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('DEP.03 Création refusée au Directeur (D2)', 'POST', '/api/v1/departments', {
+            body: { code: 'PM-REFUS', name: 'Postman · Refus' },
+            tests: [status(403), errorCode('FORBIDDEN'), message('pas les droits')].join('\n'),
+        }),
+        logout('DEP.04 Déconnexion du Directeur'),
+        request('DEP.05 Connexion du Responsable de Département', 'POST', LOGIN, {
+            body: login('dept_manager_email', 'dept_manager_password'),
+            tests: [status(200), profile('resp_dept', false)].join('\n'),
+        }),
+        request('DEP.06 Liste limitée à son département (D1)', 'GET', '/api/v1/departments', {
+            tests: [
+                status(200),
+                test('Un seul département : le sien', [
+                    '    const list = pm.response.json().data;',
+                    '    pm.expect(list).to.have.lengthOf(1);',
+                    "    pm.expect(list[0].code).to.eql('DEP-TEST');",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('DEP.07 Détail de son département avec ses collaborateurs', 'GET', '/api/v1/departments/{{dep_test_id}}', {
+            tests: [
+                status(200),
+                test('Collaborateurs avec rôle, état et indicateur de responsable', [
+                    '    const members = pm.response.json().data.members;',
+                    "    pm.expect(members).to.be.an('array').that.is.not.empty;",
+                    "    members.forEach(m => pm.expect(m).to.have.all.keys('id', 'name', 'role', 'is_active', 'is_manager'));",
+                    '    const manager = members.find(m => m.is_manager);',
+                    "    pm.expect(manager.role.key).to.eql('resp_dept');",
+                    "    pm.collectionVariables.set('dept_manager_id', manager.id);",
+                    "    const collaborator = members.find(m => m.is_active && m.role && m.role.key === 'collaborateur');",
+                    "    pm.collectionVariables.set('collab_member_id', collaborator.id);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        logout('DEP.08 Déconnexion du Responsable de Département'),
+        // Compte collaborateur dont le mot de passe n'est jamais modifié par la collection
+        // (celui de standard_email change au dossier 08) ; verrouillé au dossier 04, il est déverrouillé en 05.5.
+        request('DEP.09 Connexion du collaborateur', 'POST', LOGIN, {
+            body: login('lockout_email', 'lockout_password'),
+            tests: [status(200), profile('collaborateur', false)].join('\n'),
+        }),
+        request('DEP.10 Liste refusée au collaborateur (D1)', 'GET', '/api/v1/departments', {
+            tests: [status(403), errorCode('FORBIDDEN')].join('\n'),
+        }),
+        logout('DEP.11 Déconnexion du collaborateur'),
+        request('DEP.12 Connexion du Super Administrateur', 'POST', LOGIN, {
+            body: login('admin_email', 'admin_password'),
+            tests: [status(200), profile('super_admin', false), "pm.collectionVariables.set('admin_id', pm.response.json().data.id);"].join('\n'),
+        }),
+        request('DEP.13 Création refusée : code et nom invalides (D7)', 'POST', '/api/v1/departments', {
+            body: { code: 'PM_01 invalide', name: '' },
+            tests: [status(422), fieldError('code', 'lettres majuscules, des chiffres et des tirets'), fieldError('name')].join('\n'),
+        }),
+        request("DEP.14 Création d'un département (D2, D7)", 'POST', '/api/v1/departments', {
+            pre: [
+                "const code = 'PM-' + Date.now().toString(36).toUpperCase().slice(-8);",
+                "pm.collectionVariables.set('dep_code', code);",
+                "pm.collectionVariables.set('dep_code_input', code.toLowerCase());",
+            ].join('\n'),
+            body: { code: '{{dep_code_input}}', name: 'Postman · Département {{dep_code}}' },
+            tests: [
+                status(201),
+                test('Code mis en majuscules, actif, sans responsable', [
+                    '    const d = pm.response.json().data;',
+                    "    pm.expect(d.code).to.eql(pm.collectionVariables.get('dep_code'));",
+                    '    pm.expect(d.is_active).to.eql(true);',
+                    '    pm.expect(d.manager).to.eql(null);',
+                    '    pm.expect(d.members).to.eql([]);',
+                    "    pm.collectionVariables.set('dep_id', d.id);",
+                ].join('\n')),
+                test('Auteur de la création renseigné', "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));"),
+                message('désignez son responsable'),
+            ].join('\n'),
+        }),
+        request('DEP.15 Code déjà utilisé (D7)', 'POST', '/api/v1/departments', {
+            body: { code: '{{dep_code}}', name: 'Postman · Doublon {{dep_code}}' },
+            tests: [status(422), fieldError('code', 'déjà ce code')].join('\n'),
+        }),
+        request('DEP.16 Code non modifiable (D7)', 'PATCH', '/api/v1/departments/{{dep_id}}', {
+            body: { code: 'PM-AUTRE' },
+            tests: [status(422), fieldError('code', 'ne peut pas être modifié')].join('\n'),
+        }),
+        request("DEP.17 Responsable refusé : rattaché à un autre département (D4)", 'PATCH', '/api/v1/departments/{{dep_id}}', {
+            body: { manager_id: '{{dept_manager_id}}' },
+            tests: [status(422), fieldError('manager_id', "pas rattaché à ce département")].join('\n'),
+        }),
+        request('DEP.18 Responsable refusé : rôle Collaborateur (D4)', 'PATCH', '/api/v1/departments/{{dep_test_id}}', {
+            body: { manager_id: '{{collab_member_id}}' },
+            tests: [status(422), fieldError('manager_id', 'Responsable de Département')].join('\n'),
+        }),
+        request('DEP.19 Retrait du responsable', 'PATCH', '/api/v1/departments/{{dep_test_id}}', {
+            body: { manager_id: null },
+            tests: [status(200), test('Aucun responsable', '    pm.expect(pm.response.json().data.manager).to.eql(null);')].join('\n'),
+        }),
+        request('DEP.20 Désignation du responsable (D4)', 'PATCH', '/api/v1/departments/{{dep_test_id}}', {
+            body: { manager_id: '{{dept_manager_id}}' },
+            tests: [
+                status(200),
+                test('Responsable désigné', "    pm.expect(String(pm.response.json().data.manager.id)).to.eql(String(pm.collectionVariables.get('dept_manager_id')));"),
+            ].join('\n'),
+        }),
+        request('DEP.21 Désactivation refusée : comptes actifs rattachés (D6)', 'POST', '/api/v1/departments/{{dep_test_id}}/deactivate', {
+            tests: [status(422), fieldError('department', 'encore rattaché')].join('\n'),
+        }),
+        request("DEP.22 Désactivation d'un département sans compte actif (D6)", 'POST', '/api/v1/departments/{{dep_id}}/deactivate', {
+            tests: [status(200), test('Département désactivé', '    pm.expect(pm.response.json().data.is_active).to.eql(false);')].join('\n'),
+        }),
+        request('DEP.23 Réactivation', 'POST', '/api/v1/departments/{{dep_id}}/activate', {
+            tests: [status(200), test('Département réactivé', '    pm.expect(pm.response.json().data.is_active).to.eql(true);')].join('\n'),
+        }),
+        request('DEP.24 Aucune suppression possible (D6)', 'DELETE', '/api/v1/departments/{{dep_id}}', {
+            tests: [status(405), errorCode('METHOD_NOT_ALLOWED')].join('\n'),
+        }),
+        request('DEP.25 Journal : création du département', 'GET', '/api/v1/admin/audit-logs?event=admin.department.created', {
+            tests: departmentAuditEntry('admin.department.created'),
+        }),
+        request('DEP.26 Journal : désactivation du département', 'GET', '/api/v1/admin/audit-logs?event=admin.department.deactivated', {
+            tests: departmentAuditEntry('admin.department.deactivated'),
+        }),
+        logout('DEP.27 Déconnexion du Super Administrateur'),
+    ],
+);
+
+/* --------------------------------------------------------------- clients (lot 2.1) */
+
+/** Entrée du journal du client suivi pour un événement, produite par cette exécution. */
+const clientAuditEntry = (event, extra = '') =>
+    [
+        status(200),
+        'const entries = pm.response.json().data || [];',
+        "const expected = pm.collectionVariables.get('client_code');",
+        'const entry = entries.find(e => e.details && e.details.client && e.details.client.code === expected) || {};',
+        test(`Entrée « ${event} » produite par cette exécution`, [
+            `    pm.expect(entry.event && entry.event.key).to.eql(${JSON.stringify(event)});`,
+            "    const start = pm.collectionVariables.get('run_started_at');",
+            '    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }',
+        ].join('\n')),
+        test('Client et auteur renseignés', [
+            "    pm.expect(entry.details.client.code).to.eql(pm.collectionVariables.get('client_code'));",
+            "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+            extra,
+        ].filter(Boolean).join('\n')),
+    ].join('\n');
+
+const clients = folder(
+    'CLIENTS (lot 2.1)',
+    'Référentiel clients : champs obligatoires (C1), code généré (C2), visibilité selon le rôle (C3), '
+        + 'code non modifiable et conservé (C4). Les clients créés portent le préfixe « POSTMAN », '
+        + 'effacé à chaque remise à zéro des comptes de test.',
+    [
+        // Rend le dossier exécutable seul (option -i), sans dépendre des dossiers précédents.
+        request('CLI.00 Cookie CSRF (Sanctum)', 'GET', '/sanctum/csrf-cookie', {
+            pre: "if (!pm.collectionVariables.get('run_started_at')) { pm.collectionVariables.set('run_started_at', new Date().toISOString()); }",
+            tests: [
+                status(204),
+                test('Jeton XSRF récupéré', "    pm.expect(pm.collectionVariables.get('xsrf_token')).to.be.a('string').and.not.empty;"),
+            ].join('\n'),
+        }),
+        request('CLI.00b Fermeture d\'une session précédente', 'POST', '/api/v1/auth/logout', {
+            tests: test('Aucune session ouverte après cette requête (204 ou 401)', '    pm.expect(pm.response.code).to.be.oneOf([204, 401]);'),
+        }),
+        request('CLI.01 Connexion du Super Administrateur', 'POST', LOGIN, {
+            body: login('admin_email', 'admin_password'),
+            tests: [status(200), profile('super_admin', false), "pm.collectionVariables.set('admin_id', pm.response.json().data.id);"].join('\n'),
+        }),
+        request('CLI.02 Département de suivi', 'GET', '/api/v1/departments', {
+            tests: [
+                status(200),
+                test('Département de test retrouvé', [
+                    "    const dep = pm.response.json().data.find(d => d.code === 'DEP-TEST');",
+                    "    pm.expect(dep, 'DEP-TEST').to.be.an('object');",
+                    "    pm.collectionVariables.set('dep_test_id', dep.id);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.03 Création refusée : champs invalides (C1, C2)', 'POST', '/api/v1/clients', {
+            body: { name: 'AB', code: 'CLI-9999', department_ids: [] },
+            tests: [
+                status(422),
+                fieldError('name', 'au moins 3 caractères'),
+                fieldError('code', 'généré automatiquement'),
+                fieldError('department_ids', 'au moins un département'),
+            ].join('\n'),
+        }),
+        request('CLI.04 Création refusée : département inconnu (C1)', 'POST', '/api/v1/clients', {
+            body: { name: 'POSTMAN INCONNU', department_ids: [999999] },
+            tests: [status(422), fieldError('department_ids.0', "n'existe pas")].join('\n'),
+        }),
+        request('CLI.05 Département de suivi distinct', 'POST', '/api/v1/departments', {
+            pre: [
+                "const code = 'PM-CLI-' + Date.now().toString(36).toUpperCase().slice(-7);",
+                "pm.collectionVariables.set('client_other_dep_code', code);",
+            ].join('\n'),
+            body: { code: '{{client_other_dep_code}}', name: 'Postman · Clients {{client_other_dep_code}}' },
+            tests: [
+                status(201),
+                test('Département créé et identifiant conservé', [
+                    "    pm.collectionVariables.set('client_other_dep_id', pm.response.json().data.id);",
+                    "    pm.expect(pm.response.json().data.is_active).to.eql(true);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request("CLI.06 Création d'un client (C1, C2)", 'POST', '/api/v1/clients', {
+            pre: [
+                "const suffix = Date.now().toString(36).toUpperCase().slice(-6);",
+                "pm.collectionVariables.set('client_name', 'POSTMAN CLIENT ' + suffix);",
+                "pm.collectionVariables.set('client_name_input', ('postman client ' + suffix).toLowerCase());",
+            ].join('\n'),
+            body: {
+                name: '{{client_name_input}}',
+                legal_form: 'SARL',
+                sector: 'Commerce de gros',
+                tax_regime: 'Réel normal',
+                rccm: 'CI-ABJ-2026-B-00000',
+                dfe: '0000000 X 0',
+                address: 'Cocody Riviera 3, Abidjan',
+                phone: '+225 27 22 00 11 01',
+                email: 'CONTACT@POSTMAN.TEST',
+                contact_name: 'Adjoa KOUASSI',
+                department_ids: ['{{dep_test_id}}'],
+            },
+            tests: [
+                status(201),
+                test('Code CLI généré, dénomination en majuscules et champs conservés', [
+                    '    const c = pm.response.json().data;',
+                    "    pm.expect(c.code).to.match(/^CLI-\\d{4,}$/);",
+                    "    pm.expect(c.name).to.eql(pm.collectionVariables.get('client_name'));",
+                    "    pm.expect(c.email).to.eql('contact@postman.test');",
+                    "    pm.expect(c.legal_form).to.eql('SARL');",
+                    "    pm.expect(c.sector).to.eql('Commerce de gros');",
+                    "    pm.expect(c.tax_regime).to.eql('Réel normal');",
+                    "    pm.expect(c.is_active).to.eql(true);",
+                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                    "    pm.expect(c.departments[0].code).to.eql('DEP-TEST');",
+                    "    pm.expect(c.documents_count).to.eql(null);",
+                    "    pm.expect(c.last_activity_at).to.eql(null);",
+                    "    pm.collectionVariables.set('client_id', c.id);",
+                    "    pm.collectionVariables.set('client_code', c.code);",
+                ].join('\n')),
+                test('Auteur de la création renseigné', "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));"),
+                message('Client créé'),
+            ].join('\n'),
+        }),
+        request("CLI.07 Création d'un client d'un autre département (C3)", 'POST', '/api/v1/clients', {
+            pre: [
+                "const suffix = Date.now().toString(36).toUpperCase().slice(-6);",
+                "pm.collectionVariables.set('other_client_name', 'POSTMAN AUTRE DEPARTEMENT ' + suffix);",
+            ].join('\n'),
+            body: {
+                name: '{{other_client_name}}',
+                sector: 'Industrie',
+                department_ids: ['{{client_other_dep_id}}'],
+            },
+            tests: [
+                status(201),
+                test('Client rattaché au département distinct', [
+                    '    const c = pm.response.json().data;',
+                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                    "    pm.expect(String(c.departments[0].id)).to.eql(String(pm.collectionVariables.get('client_other_dep_id')));",
+                    "    pm.collectionVariables.set('other_client_id', c.id);",
+                    "    pm.collectionVariables.set('other_client_code', c.code);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.08 Code non modifiable (C4)', 'PATCH', '/api/v1/clients/{{client_id}}', {
+            body: { code: 'CLI-9999' },
+            tests: [status(422), fieldError('code', 'pas modifiable')].join('\n'),
+        }),
+        request('CLI.09 Modification des champs et des départements', 'PATCH', '/api/v1/clients/{{client_id}}', {
+            body: {
+                name: '{{client_name}} MODIFIÉ',
+                sector: 'Industrie',
+                department_ids: ['{{dep_test_id}}'],
+            },
+            tests: [
+                status(200),
+                test('Code inchangé, nouveaux champs appliqués', [
+                    '    const c = pm.response.json().data;',
+                    "    pm.expect(c.code).to.eql(pm.collectionVariables.get('client_code'));",
+                    "    pm.expect(c.name).to.eql(pm.collectionVariables.get('client_name') + ' MODIFIÉ');",
+                    "    pm.expect(c.sector).to.eql('Industrie');",
+                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.10 Détail d\'un client', 'GET', '/api/v1/clients/{{client_id}}', {
+            tests: [
+                status(200),
+                test('Fiche complète et compteurs encore nuls', [
+                    '    const c = pm.response.json().data;',
+                    "    pm.expect(c).to.include.all.keys('id', 'code', 'name', 'legal_form', 'sector', 'tax_regime', 'rccm', 'dfe', 'address', 'phone', 'email', 'contact_name', 'is_active', 'departments', 'created_at', 'documents_count', 'last_activity_at');",
+                    "    pm.expect(c.code).to.eql(pm.collectionVariables.get('client_code'));",
+                    "    pm.expect(c.documents_count).to.eql(null);",
+                    "    pm.expect(c.last_activity_at).to.eql(null);",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.11 Recherche par code', 'GET', '/api/v1/clients?search={{client_code}}', {
+            tests: [
+                status(200),
+                test('Un seul client correspond au code', [
+                    '    const list = pm.response.json().data;',
+                    '    pm.expect(list).to.have.lengthOf(1);',
+                    "    pm.expect(list[0].code).to.eql(pm.collectionVariables.get('client_code'));",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.12 Filtre par département', 'GET', '/api/v1/clients?department={{dep_test_id}}', {
+            tests: [
+                status(200),
+                test('Le client du département est présent, celui de l\'autre département est absent', [
+                    '    const list = pm.response.json().data;',
+                    "    pm.expect(list.map(c => c.code)).to.include(pm.collectionVariables.get('client_code'));",
+                    "    pm.expect(list.map(c => c.code)).to.not.include(pm.collectionVariables.get('other_client_code'));",
+                ].join('\n')),
+                test('Départements proposés dans le filtre', [
+                    '    const deps = pm.response.json().departments;',
+                    "    pm.expect(deps).to.be.an('array').that.is.not.empty;",
+                    "    pm.expect(deps.map(d => d.code)).to.include('DEP-TEST');",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.13 Aucune suppression possible (C4)', 'DELETE', '/api/v1/clients/{{client_id}}', {
+            tests: [status(405), errorCode('METHOD_NOT_ALLOWED')].join('\n'),
+        }),
+        request('CLI.14 Journal : création du client', 'GET', '/api/v1/admin/audit-logs?event=admin.client.created', {
+            tests: clientAuditEntry('admin.client.created', "    pm.expect(entry.details.departments).to.include('DEP-TEST');"),
+        }),
+        request('CLI.15 Journal : modification du client', 'GET', '/api/v1/admin/audit-logs?event=admin.client.updated', {
+            tests: clientAuditEntry('admin.client.updated', "    pm.expect(entry.details.changes).to.have.property('sector');"),
+        }),
+        logout('CLI.16 Déconnexion du Super Administrateur'),
+        request('CLI.17 Connexion du Directeur', 'POST', LOGIN, {
+            body: login('director_email', 'director_password'),
+            tests: [status(200), profile('directeur', false)].join('\n'),
+        }),
+        request('CLI.18 Le Directeur voit tout le cabinet (C3)', 'GET', '/api/v1/clients', {
+            tests: [
+                status(200),
+                test('Les deux clients sont visibles', [
+                    "    const codes = pm.response.json().data.map(c => c.code);",
+                    "    pm.expect(codes).to.include(pm.collectionVariables.get('client_code'));",
+                    "    pm.expect(codes).to.include(pm.collectionVariables.get('other_client_code'));",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.19 Création refusée au Directeur (C3)', 'POST', '/api/v1/clients', {
+            body: { name: 'POSTMAN REFUS DIRECTEUR', department_ids: ['{{dep_test_id}}'] },
+            tests: [status(403), errorCode('FORBIDDEN')].join('\n'),
+        }),
+        request('CLI.20 Modification refusée au Directeur (C3)', 'PATCH', '/api/v1/clients/{{client_id}}', {
+            body: { name: 'POSTMAN REFUS DIRECTEUR' },
+            tests: [status(403), errorCode('FORBIDDEN')].join('\n'),
+        }),
+        logout('CLI.21 Déconnexion du Directeur'),
+        request('CLI.22 Connexion du collaborateur', 'POST', LOGIN, {
+            body: login('lockout_email', 'lockout_password'),
+            tests: [status(200), profile('collaborateur', false)].join('\n'),
+        }),
+        request('CLI.23 Le collaborateur ne voit que son département (C3)', 'GET', '/api/v1/clients', {
+            tests: [
+                status(200),
+                test('Client de son département présent, client extérieur absent', [
+                    "    const codes = pm.response.json().data.map(c => c.code);",
+                    "    pm.expect(codes).to.include(pm.collectionVariables.get('client_code'));",
+                    "    pm.expect(codes).to.not.include(pm.collectionVariables.get('other_client_code'));",
+                ].join('\n')),
+            ].join('\n'),
+        }),
+        request('CLI.24 Fiche autorisée dans son département', 'GET', '/api/v1/clients/{{client_id}}', {
+            tests: [status(200), test('Code attendu', "    pm.expect(pm.response.json().data.code).to.eql(pm.collectionVariables.get('client_code'));")].join('\n'),
+        }),
+        request('CLI.25 Fiche refusée hors de son département (C3)', 'GET', '/api/v1/clients/{{other_client_id}}', {
+            tests: [status(403), errorCode('FORBIDDEN')].join('\n'),
+        }),
+        request('CLI.26 Création refusée au collaborateur (C3)', 'POST', '/api/v1/clients', {
+            body: { name: 'POSTMAN REFUS COLLABORATEUR', department_ids: ['{{dep_test_id}}'] },
+            tests: [status(403), errorCode('FORBIDDEN')].join('\n'),
+        }),
+        logout('CLI.27 Déconnexion du collaborateur'),
+    ],
+);
+
 /* ------------------------------------------------------------ collection */
 
 const collectionPreRequest = [
@@ -579,6 +1057,10 @@ const collectionTest = [
 const runtimeVariables = [
     'xsrf_token', 'run_started_at', 'loop_count', 'invalid_credentials_body', 'forgot_response',
     'admin_id', 'lockout_user_id', 'created_user_id', 'created_user_email', 'temporary_password',
+    'dep_test_id', 'dep_id', 'dep_code', 'dep_code_input', 'dept_manager_id', 'collab_member_id',
+    'client_id', 'client_code', 'client_name', 'client_name_input',
+    'other_client_id', 'other_client_code', 'other_client_name',
+    'client_other_dep_id', 'client_other_dep_code',
 ].map((key) => ({ key, value: '', type: 'string' }));
 
 const collection = {
@@ -609,6 +1091,8 @@ const collection = {
             preparation, withoutSession, connexion, disabled, lockout, administration, afterUnlock, firstLogin, changePassword, forgot, audit,
             manualReset,
         ]),
+        departments,
+        clients,
     ],
 };
 
@@ -636,6 +1120,8 @@ const environment = {
         v('lockout_email', 'postman.verrouillage@postman.test'),
         v('lockout_password', 'PostmanVerrou2026', 'secret'),
         v('reset_email', 'postman.reinit@postman.test'),
+        v('dept_manager_email', 'postman.responsable@postman.test'),
+        v('dept_manager_password', 'PostmanRespDep2026', 'secret'),
         v('unknown_email', 'postman.inconnu@postman.test'),
         // Nouveaux mots de passe choisis pendant les tests (conformes à la politique).
         v('new_password', 'PostmanNouveau2026', 'secret'),

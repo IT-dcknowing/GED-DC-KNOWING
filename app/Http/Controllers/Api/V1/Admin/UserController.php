@@ -35,26 +35,32 @@ class UserController extends Controller
         ]);
 
         $users = User::query()
-            ->with(['department', 'roles'])
-            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($q) => $q
-                ->where('name', 'like', "%{$s}%")
-                ->orWhere('email', 'like', "%{$s}%")))
+            ->with(['department', 'roles', 'creator:id,name'])
+            ->when($filters['search'] ?? null, function ($q, $search) {
+                // « % » et « _ » saisis sont cherchés tels quels (échappement « ! », valable sous MySQL et SQLite).
+                $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
+                $q->where(fn ($q) => $q
+                    ->whereRaw("name like ? escape '!'", [$pattern])
+                    ->orWhereRaw("email like ? escape '!'", [$pattern]));
+            })
             ->when($filters['role'] ?? null, fn ($q, $role) => $q->role($role))
             ->when($filters['status'] ?? null, fn ($q, $status) => $q->where('is_active', $status === 'active'))
             ->orderBy('name')
             ->paginate(25)
             ->withQueryString();
 
-        AdminUserResource::$lockedUntil = $this->lockouts->lockedUntilMany($users->pluck('email'));
+        $lockedUntil = $this->lockouts->lockedUntilMany($users->pluck('email'));
+        $users->through(fn (User $user) => new AdminUserResource($user, $lockedUntil[$user->email] ?? null));
 
         return AdminUserResource::collection($users);
     }
 
     public function show(User $user): AdminUserResource
     {
-        AdminUserResource::$lockedUntil = $this->lockouts->lockedUntilMany([$user->email]);
-
-        return new AdminUserResource($user->load('department'));
+        return new AdminUserResource(
+            $user->load(['department', 'creator:id,name']),
+            $this->lockouts->lockedUntilMany([$user->email])[$user->email] ?? null,
+        );
     }
 
     public function store(StoreUserRequest $request): JsonResponse

@@ -10,6 +10,7 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Spatie\Permission\Exceptions\UnauthorizedException;
 use Spatie\Permission\Middleware\PermissionMiddleware;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -46,6 +47,16 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (UnauthorizedException $e, Request $request) use ($isApi) {
+            if ($isApi($request)) {
+                return response()->json([
+                    'message' => 'Vous n\'avez pas les droits nécessaires pour cette action.',
+                    'code' => 'FORBIDDEN',
+                ], 403);
+            }
+        });
+
+        // Refus d'une Policy (Gate::authorize) : même réponse que le refus d'une permission.
+        $exceptions->render(function (AccessDeniedHttpException $e, Request $request) use ($isApi) {
             if ($isApi($request)) {
                 return response()->json([
                     'message' => 'Vous n\'avez pas les droits nécessaires pour cette action.',

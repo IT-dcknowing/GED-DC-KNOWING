@@ -1,21 +1,42 @@
-import { ChevronDown, House, KeyRound, LogOut, Menu, X } from 'lucide-react';
+import { Briefcase, Building2, ChevronDown, House, KeyRound, LogOut, Menu, Users, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
+import type { CurrentUser } from '@/api/auth';
+import { canViewDepartments } from '@/api/departments';
 import { BrandMark } from '@/components/ui/BrandMark';
-import { useCurrentUser, useLogout } from '@/features/auth/useAuth';
+import { hasPermission, useCurrentUser, useLogout } from '@/features/auth/useAuth';
 
 type NavItem = {
     to: string;
     label: string;
     icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' }>;
+    /** Permission requise pour voir l'entrée (le serveur contrôle de son côté chaque requête). */
+    permission?: string;
+    /** Règle d'affichage propre au module, quand l'accès ne dépend pas d'une seule permission. */
+    visible?: (user: CurrentUser | null | undefined) => boolean;
 };
 
+type NavGroup = { label: string | null; items: NavItem[] };
+
 /**
- * Seuls les modules réellement disponibles figurent dans le menu.
- * Les autres (explorateur, clients, validations…) seront ajoutés au fil de leur développement.
+ * Seuls les modules réellement disponibles figurent dans le menu, regroupés comme dans la maquette.
+ * Les autres (explorateur, validations…) seront ajoutés au fil de leur développement.
  */
-const NAV_ITEMS: NavItem[] = [{ to: '/', label: 'Accueil', icon: House }];
+const NAV_GROUPS: NavGroup[] = [
+    { label: null, items: [{ to: '/', label: 'Accueil', icon: House }] },
+    {
+        label: 'Documents',
+        items: [
+            { to: '/clients', label: 'Clients', icon: Building2 },
+            { to: '/departements', label: 'Départements', icon: Briefcase, visible: canViewDepartments },
+        ],
+    },
+    {
+        label: 'Administration',
+        items: [{ to: '/administration/utilisateurs', label: 'Utilisateurs et rôles', icon: Users, permission: 'users.manage' }],
+    },
+];
 
 export function AppLayout() {
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -59,6 +80,8 @@ export function AppLayout() {
 }
 
 function Sidebar({ className = '', onClose }: { className?: string; onClose?: () => void }) {
+    const { data: user } = useCurrentUser();
+
     return (
         <aside
             className={`bg-wood sticky top-0 h-screen w-64 shrink-0 flex-col border-r border-or/20 lg:flex ${className}`}
@@ -82,26 +105,40 @@ function Sidebar({ className = '', onClose }: { className?: string; onClose?: ()
                 )}
             </div>
             <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-                <ul className="space-y-0.5">
-                    {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-                        <li key={to}>
-                            <NavLink
-                                to={to}
-                                end
-                                className={({ isActive }) =>
-                                    `relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
-                                        isActive
-                                            ? 'bg-or/15 text-[#f8f1dc] before:absolute before:inset-y-2 before:-left-2.5 before:w-[3px] before:rounded-sm before:bg-or'
-                                            : 'text-[#cfc6ae] hover:bg-contour/10 hover:text-[#f1e9d2]'
-                                    }`
-                                }
-                            >
-                                <Icon aria-hidden="true" className="size-[17px] text-contour" />
-                                {label}
-                            </NavLink>
-                        </li>
-                    ))}
-                </ul>
+                {NAV_GROUPS.map((group) => {
+                    const items = group.items.filter(
+                        (item) => (!item.permission || hasPermission(user, item.permission)) && (!item.visible || item.visible(user)),
+                    );
+                    if (items.length === 0) return null;
+
+                    return (
+                        <div key={group.label ?? 'principal'}>
+                            {group.label && (
+                                <p className="px-2.5 pt-3.5 pb-1.5 text-[10px] tracking-[1.8px] text-contour/70 uppercase">{group.label}</p>
+                            )}
+                            <ul className="space-y-0.5">
+                                {items.map(({ to, label, icon: Icon }) => (
+                                    <li key={to}>
+                                        <NavLink
+                                            to={to}
+                                            end
+                                            className={({ isActive }) =>
+                                                `relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
+                                                    isActive
+                                                        ? 'bg-or/15 text-[#f8f1dc] before:absolute before:inset-y-2 before:-left-2.5 before:w-[3px] before:rounded-sm before:bg-or'
+                                                        : 'text-[#cfc6ae] hover:bg-contour/10 hover:text-[#f1e9d2]'
+                                                }`
+                                            }
+                                        >
+                                            <Icon aria-hidden="true" className="size-[17px] text-contour" />
+                                            {label}
+                                        </NavLink>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    );
+                })}
             </nav>
         </aside>
     );

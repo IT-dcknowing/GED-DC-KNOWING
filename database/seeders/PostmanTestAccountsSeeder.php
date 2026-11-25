@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\RoleName;
+use App\Models\Client;
 use App\Models\Department;
 use App\Models\User;
 use App\Services\Security\LoginLockoutService;
@@ -43,7 +44,14 @@ class PostmanTestAccountsSeeder extends Seeder
         'first_login' => ['postman.premiere@postman.test', RoleName::Collaborator, 'PostmanTemp2026a', true, true, true],
         'lockout' => ['postman.verrouillage@postman.test', RoleName::Collaborator, 'PostmanVerrou2026', true, false, true],
         'reset' => ['postman.reinit@postman.test', RoleName::Collaborator, 'PostmanReinit2026', true, false, true],
+        'dept_manager' => ['postman.responsable@postman.test', RoleName::DepartmentManager, 'PostmanRespDep2026', true, false, true],
     ];
+
+    /** Préfixe des codes de départements créés par la collection, effacés à chaque remise à zéro. */
+    public const DEPARTMENT_CODE_PREFIX = 'PM-';
+
+    /** Préfixe des dénominations des clients créés par la collection, effacés à chaque remise à zéro. */
+    public const CLIENT_NAME_PREFIX = 'POSTMAN';
 
     public function run(PasswordService $passwords, LoginLockoutService $lockouts): void
     {
@@ -55,13 +63,14 @@ class PostmanTestAccountsSeeder extends Seeder
 
         $this->call(RolesAndPermissionsSeeder::class);
 
-        $department = Department::firstOrCreate(
-            ['code' => 'DEP-TEST'],
-            ['name' => 'Département de test', 'is_active' => true],
-        );
-
-        DB::transaction(function () use ($passwords, $lockouts, $department) {
+        DB::transaction(function () use ($passwords, $lockouts) {
             $this->resetPreviousRun($lockouts);
+
+            $department = Department::firstOrCreate(
+                ['code' => 'DEP-TEST'],
+                ['name' => 'Département de test', 'is_active' => true],
+            );
+            $department->forceFill(['name' => 'Département de test', 'is_active' => true])->save();
 
             foreach (self::ACCOUNTS as $key => [$email, $role, $password, $active, $mustChange, $withDepartment]) {
                 $user = User::create([
@@ -74,6 +83,10 @@ class PostmanTestAccountsSeeder extends Seeder
                 $user->forceFill(['must_change_password' => $mustChange, 'password_changed_at' => now()])->save();
                 $user->syncRoles([$role->value]);
                 $passwords->recordCurrent($user);
+
+                if ($key === 'dept_manager') {
+                    $department->forceFill(['manager_id' => $user->id])->save();
+                }
             }
         });
 
@@ -113,5 +126,11 @@ class PostmanTestAccountsSeeder extends Seeder
         // Suppression modèle par modèle : retire aussi les rôles (spatie) et l'historique des mots de passe.
         // Les entrées du journal d'audit sont conservées (le compte concerné devient « null »).
         $previous->each->delete();
+
+        // Départements créés par la collection lors d'une exécution précédente (codes « PM-… »).
+        Department::query()->where('code', 'like', self::DEPARTMENT_CODE_PREFIX.'%')->delete();
+
+        // Clients créés par la collection lors d'une exécution précédente (dénominations « POSTMAN… »).
+        Client::query()->where('name', 'like', self::CLIENT_NAME_PREFIX.'%')->delete();
     }
 }

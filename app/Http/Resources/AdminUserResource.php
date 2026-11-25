@@ -14,8 +14,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class AdminUserResource extends JsonResource
 {
-    /** @var array<string, CarbonInterface> fins de verrouillage par e-mail, calculées pour la page */
-    public static array $lockedUntil = [];
+    /**
+     * @param  CarbonInterface|null  $lockedUntil  fin du verrouillage de connexion, calculée par l'appelant
+     */
+    public function __construct($resource, private readonly ?CarbonInterface $lockedUntil = null)
+    {
+        parent::__construct($resource);
+    }
 
     /**
      * @return array<string, mixed>
@@ -23,7 +28,6 @@ class AdminUserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $role = $this->roleName();
-        $lockedUntil = self::$lockedUntil[$this->email] ?? null;
 
         return [
             'id' => $this->id,
@@ -37,10 +41,12 @@ class AdminUserResource extends JsonResource
             ] : null,
             'is_active' => (bool) $this->is_active,
             'must_change_password' => (bool) $this->must_change_password,
-            'locked_until' => $lockedUntil?->toIso8601String(),
+            'locked_until' => $this->lockedUntil?->toIso8601String(),
             'last_login_at' => $this->last_login_at?->toIso8601String(),
             'password_changed_at' => $this->password_changed_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
+            // Administrateur à l'origine du compte ; null pour un compte créé en ligne de commande.
+            'created_by' => $this->creator ? ['id' => $this->creator->id, 'name' => $this->creator->name] : null,
         ];
     }
 }

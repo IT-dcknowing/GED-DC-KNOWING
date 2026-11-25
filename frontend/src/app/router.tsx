@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router';
 import { GuestOnly, RequireAuth, RequirePasswordChange } from '@/app/guards';
 import { AppLayout } from '@/app/layout/AppLayout';
 import { RootLayout } from '@/app/RootLayout';
+import { FullPageStatus } from '@/components/ui/FullPageStatus';
 import { FirstLoginPage } from '@/features/auth/FirstLoginPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { LoginPage } from '@/features/auth/LoginPage';
@@ -17,6 +18,8 @@ export const routes: RouteObject[] = [
     {
         element: <RootLayout />,
         errorElement: <RouteErrorPage />,
+        // Affiché pendant le chargement initial d'un module chargé à la demande.
+        hydrateFallbackElement: <FullPageStatus />,
         children: [
             {
                 element: <GuestOnly />,
@@ -40,6 +43,10 @@ export const routes: RouteObject[] = [
                             { path: '/', element: <HomePage /> },
                             { path: '/profil/mot-de-passe', element: <ChangePasswordPage /> },
                             { path: '/acces-refuse', element: <AccessDeniedPage /> },
+                            // Module chargé à la demande : son code n'est téléchargé qu'à l'ouverture.
+                            { path: '/administration/utilisateurs', lazy: () => import('@/features/admin/users/route') },
+                            { path: '/clients', lazy: () => import('@/features/clients/route') },
+                            { path: '/departements', lazy: () => import('@/features/departments/route') },
                         ],
                     },
                 ],

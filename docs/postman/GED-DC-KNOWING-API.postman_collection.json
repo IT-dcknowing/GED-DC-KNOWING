@@ -90,6 +90,81 @@
             "key": "temporary_password",
             "value": "",
             "type": "string"
+        },
+        {
+            "key": "dep_test_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dep_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dep_code",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dep_code_input",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "dept_manager_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "collab_member_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_code",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_name",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_name_input",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "other_client_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "other_client_code",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "other_client_name",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_other_dep_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "client_other_dep_code",
+            "value": "",
+            "type": "string"
         }
     ],
     "item": [
@@ -1019,7 +1094,7 @@
                             }
                         },
                         {
-                            "name": "05.2 Liste des rôles",
+                            "name": "05.2 Liste des rôles avec permissions et nombre de comptes",
                             "event": [
                                 {
                                     "listen": "test",
@@ -1029,10 +1104,24 @@
                                             "pm.test(\"Code HTTP 200\", function () {",
                                             "    pm.response.to.have.status(200);",
                                             "});",
-                                            "pm.test(\"Les 7 rôles avec leur libellé\", function () {",
+                                            "pm.test(\"Les 7 rôles avec libellé, description, permissions et nombre de comptes\", function () {",
                                             "    const roles = pm.response.json().data;",
                                             "    pm.expect(roles).to.have.lengthOf(7);",
-                                            "    roles.forEach(r => pm.expect(r).to.have.all.keys('key', 'label'));",
+                                            "    roles.forEach(r => {",
+                                            "        pm.expect(r).to.have.all.keys('key', 'label', 'description', 'users_count', 'permissions');",
+                                            "        pm.expect(r.description).to.be.a('string').and.not.empty;",
+                                            "        pm.expect(r.users_count).to.be.a('number').and.at.least(0);",
+                                            "        r.permissions.forEach(p => pm.expect(p).to.have.all.keys('key', 'label'));",
+                                            "    });",
+                                            "});",
+                                            "pm.test(\"Catalogue des 17 permissions, cohérent avec celles des rôles\", function () {",
+                                            "    const body = pm.response.json();",
+                                            "    const all = body.meta.permissions.map(p => p.key);",
+                                            "    pm.expect(all).to.have.lengthOf(17);",
+                                            "    body.data.forEach(r => r.permissions.forEach(p => pm.expect(all).to.include(p.key)));",
+                                            "    const admin = body.data.find(r => r.key === 'super_admin');",
+                                            "    pm.expect(admin.permissions, 'le Super Administrateur a toutes les permissions').to.have.lengthOf(17);",
+                                            "    pm.expect(admin.users_count, 'au moins le compte Postman').to.be.at.least(1);",
                                             "});"
                                         ]
                                     }
@@ -1096,6 +1185,31 @@
                                 "method": "GET",
                                 "header": [],
                                 "url": "{{base_url}}/api/v1/admin/users?search={{lockout_email}}"
+                            }
+                        },
+                        {
+                            "name": "05.4b Recherche : « % » cherché tel quel (A2)",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Code HTTP 200\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "});",
+                                            "pm.test(\"Aucun compte renvoyé sans « % » dans son nom ou son adresse\", function () {",
+                                            "    pm.response.json().data.forEach(u => pm.expect(u.name + u.email).to.include('%'));",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": "{{base_url}}/api/v1/admin/users?search=%25",
+                                "description": "Le caractère « % » saisi n'est pas un joker : seuls les comptes dont le nom ou l'adresse contient « % » sont renvoyés."
                             }
                         },
                         {
@@ -1197,6 +1311,9 @@
                                             "    pm.expect(d.must_change_password).to.eql(true);",
                                             "    pm.collectionVariables.set('created_user_id', d.id);",
                                             "});",
+                                            "pm.test(\"Créateur du compte renseigné (A4)\", function () {",
+                                            "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                            "});",
                                             "pm.test(\"Mot de passe temporaire conforme à la politique (14 caractères, majuscule, minuscule, chiffre)\", function () {",
                                             "    const p = pm.response.json().temporary_password;",
                                             "    pm.expect(p).to.be.a('string').with.lengthOf(14);",
@@ -1243,6 +1360,12 @@
                                             "pm.test(\"Aucun mot de passe dans la fiche\", function () {",
                                             "    pm.expect(pm.response.text()).to.not.include('temporary_password');",
                                             "    pm.expect(pm.response.json().data).to.not.have.property('password');",
+                                            "});",
+                                            "pm.test(\"Date et auteur de la création affichés (A4)\", function () {",
+                                            "    const d = pm.response.json().data;",
+                                            "    pm.expect(d.created_at).to.be.a('string').and.not.empty;",
+                                            "    pm.expect(d.created_by).to.have.all.keys('id', 'name');",
+                                            "    pm.expect(String(d.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
                                             "});"
                                         ]
                                     }
@@ -1340,6 +1463,46 @@
                                 "method": "POST",
                                 "header": [],
                                 "url": "{{base_url}}/api/v1/admin/users/{{admin_id}}/deactivate"
+                            }
+                        },
+                        {
+                            "name": "05.11b Interdiction de modifier son propre rôle (A1)",
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Code HTTP 422\", function () {",
+                                            "    pm.response.to.have.status(422);",
+                                            "});",
+                                            "pm.test(\"Erreur sur le champ « role » : « Vous ne pouvez pas modifier votre propre rôle. »\", function () {",
+                                            "    const errors = pm.response.json().errors || {};",
+                                            "    pm.expect(errors, 'erreurs de validation').to.have.property(\"role\");",
+                                            "    pm.expect(errors[\"role\"].join(' ')).to.include(\"Vous ne pouvez pas modifier votre propre rôle.\");",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ],
+                            "request": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": "{{base_url}}/api/v1/admin/users/{{admin_id}}",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"role\": \"directeur\"\n}",
+                                    "options": {
+                                        "raw": {
+                                            "language": "json"
+                                        }
+                                    }
+                                }
                             }
                         },
                         {
@@ -2843,6 +3006,1989 @@
                             }
                         }
                     ]
+                }
+            ]
+        },
+        {
+            "name": "DÉPARTEMENTS (lot 1.3)",
+            "description": "Consultation selon le rôle (D1), gestion par le Super Administrateur (D2), responsable (D4), désactivation (D6), code (D7). Les départements créés ici ont un code « PM-… », effacé à chaque remise à zéro des comptes de test.",
+            "item": [
+                {
+                    "name": "DEP.00 Cookie CSRF (Sanctum)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (!pm.collectionVariables.get('run_started_at')) { pm.collectionVariables.set('run_started_at', new Date().toISOString()); }"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "pm.test(\"Jeton XSRF récupéré\", function () {",
+                                    "    pm.expect(pm.collectionVariables.get('xsrf_token')).to.be.a('string').and.not.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/sanctum/csrf-cookie"
+                    }
+                },
+                {
+                    "name": "DEP.00b Fermeture d'une session précédente",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Aucune session ouverte après cette requête (204 ou 401)\", function () {",
+                                    "    pm.expect(pm.response.code).to.be.oneOf([204, 401]);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "DEP.01 Connexion du Directeur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle directeur)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"directeur\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{director_email}}\",\n    \"password\": \"{{director_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.02 Liste de tous les départements (D1)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Départements avec code, nom, état, responsable et nombre de collaborateurs actifs\", function () {",
+                                    "    const list = pm.response.json().data;",
+                                    "    pm.expect(list).to.be.an('array').that.is.not.empty;",
+                                    "    list.forEach(d => pm.expect(d).to.include.all.keys('id', 'code', 'name', 'is_active', 'manager', 'active_members_count', 'created_at'));",
+                                    "    list.forEach(d => pm.expect(d, 'pas de liste de membres dans la liste').to.not.have.property('members'));",
+                                    "});",
+                                    "pm.test(\"Département de test présent, avec son responsable\", function () {",
+                                    "    const dep = pm.response.json().data.find(d => d.code === 'DEP-TEST');",
+                                    "    pm.expect(dep, 'DEP-TEST').to.be.an('object');",
+                                    "    pm.expect(dep.manager.name).to.include('Responsable de Département');",
+                                    "    pm.collectionVariables.set('dep_test_id', dep.id);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments"
+                    }
+                },
+                {
+                    "name": "DEP.03 Création refusée au Directeur (D2)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});",
+                                    "pm.test(\"Message : « pas les droits »\", function () {",
+                                    "    pm.expect(pm.response.json().message).to.include(\"pas les droits\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"PM-REFUS\",\n    \"name\": \"Postman · Refus\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.04 Déconnexion du Directeur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "DEP.05 Connexion du Responsable de Département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle resp_dept)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"resp_dept\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{dept_manager_email}}\",\n    \"password\": \"{{dept_manager_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.06 Liste limitée à son département (D1)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Un seul département : le sien\", function () {",
+                                    "    const list = pm.response.json().data;",
+                                    "    pm.expect(list).to.have.lengthOf(1);",
+                                    "    pm.expect(list[0].code).to.eql('DEP-TEST');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments"
+                    }
+                },
+                {
+                    "name": "DEP.07 Détail de son département avec ses collaborateurs",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Collaborateurs avec rôle, état et indicateur de responsable\", function () {",
+                                    "    const members = pm.response.json().data.members;",
+                                    "    pm.expect(members).to.be.an('array').that.is.not.empty;",
+                                    "    members.forEach(m => pm.expect(m).to.have.all.keys('id', 'name', 'role', 'is_active', 'is_manager'));",
+                                    "    const manager = members.find(m => m.is_manager);",
+                                    "    pm.expect(manager.role.key).to.eql('resp_dept');",
+                                    "    pm.collectionVariables.set('dept_manager_id', manager.id);",
+                                    "    const collaborator = members.find(m => m.is_active && m.role && m.role.key === 'collaborateur');",
+                                    "    pm.collectionVariables.set('collab_member_id', collaborator.id);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_test_id}}"
+                    }
+                },
+                {
+                    "name": "DEP.08 Déconnexion du Responsable de Département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "DEP.09 Connexion du collaborateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle collaborateur)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"collaborateur\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{lockout_email}}\",\n    \"password\": \"{{lockout_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.10 Liste refusée au collaborateur (D1)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments"
+                    }
+                },
+                {
+                    "name": "DEP.11 Déconnexion du collaborateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "DEP.12 Connexion du Super Administrateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle super_admin)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"super_admin\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});",
+                                    "pm.collectionVariables.set('admin_id', pm.response.json().data.id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{admin_email}}\",\n    \"password\": \"{{admin_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.13 Création refusée : code et nom invalides (D7)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « code » : « lettres majuscules, des chiffres et des tirets »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"code\");",
+                                    "    pm.expect(errors[\"code\"].join(' ')).to.include(\"lettres majuscules, des chiffres et des tirets\");",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « name »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"name\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"PM_01 invalide\",\n    \"name\": \"\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.14 Création d'un département (D2, D7)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const code = 'PM-' + Date.now().toString(36).toUpperCase().slice(-8);",
+                                    "pm.collectionVariables.set('dep_code', code);",
+                                    "pm.collectionVariables.set('dep_code_input', code.toLowerCase());"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "pm.test(\"Code mis en majuscules, actif, sans responsable\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d.code).to.eql(pm.collectionVariables.get('dep_code'));",
+                                    "    pm.expect(d.is_active).to.eql(true);",
+                                    "    pm.expect(d.manager).to.eql(null);",
+                                    "    pm.expect(d.members).to.eql([]);",
+                                    "    pm.collectionVariables.set('dep_id', d.id);",
+                                    "});",
+                                    "pm.test(\"Auteur de la création renseigné\", function () {",
+                                    "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "});",
+                                    "pm.test(\"Message : « désignez son responsable »\", function () {",
+                                    "    pm.expect(pm.response.json().message).to.include(\"désignez son responsable\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"{{dep_code_input}}\",\n    \"name\": \"Postman · Département {{dep_code}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.15 Code déjà utilisé (D7)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « code » : « déjà ce code »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"code\");",
+                                    "    pm.expect(errors[\"code\"].join(' ')).to.include(\"déjà ce code\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"{{dep_code}}\",\n    \"name\": \"Postman · Doublon {{dep_code}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.16 Code non modifiable (D7)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « code » : « ne peut pas être modifié »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"code\");",
+                                    "    pm.expect(errors[\"code\"].join(' ')).to.include(\"ne peut pas être modifié\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"PM-AUTRE\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.17 Responsable refusé : rattaché à un autre département (D4)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « manager_id » : « pas rattaché à ce département »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"manager_id\");",
+                                    "    pm.expect(errors[\"manager_id\"].join(' ')).to.include(\"pas rattaché à ce département\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"manager_id\": \"{{dept_manager_id}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.18 Responsable refusé : rôle Collaborateur (D4)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « manager_id » : « Responsable de Département »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"manager_id\");",
+                                    "    pm.expect(errors[\"manager_id\"].join(' ')).to.include(\"Responsable de Département\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_test_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"manager_id\": \"{{collab_member_id}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.19 Retrait du responsable",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Aucun responsable\", function () {",
+                                    "    pm.expect(pm.response.json().data.manager).to.eql(null);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_test_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"manager_id\": null\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.20 Désignation du responsable (D4)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Responsable désigné\", function () {",
+                                    "    pm.expect(String(pm.response.json().data.manager.id)).to.eql(String(pm.collectionVariables.get('dept_manager_id')));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_test_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"manager_id\": \"{{dept_manager_id}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "DEP.21 Désactivation refusée : comptes actifs rattachés (D6)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « department » : « encore rattaché »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"department\");",
+                                    "    pm.expect(errors[\"department\"].join(' ')).to.include(\"encore rattaché\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_test_id}}/deactivate"
+                    }
+                },
+                {
+                    "name": "DEP.22 Désactivation d'un département sans compte actif (D6)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Département désactivé\", function () {",
+                                    "    pm.expect(pm.response.json().data.is_active).to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_id}}/deactivate"
+                    }
+                },
+                {
+                    "name": "DEP.23 Réactivation",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Département réactivé\", function () {",
+                                    "    pm.expect(pm.response.json().data.is_active).to.eql(true);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_id}}/activate"
+                    }
+                },
+                {
+                    "name": "DEP.24 Aucune suppression possible (D6)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 405\", function () {",
+                                    "    pm.response.to.have.status(405);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur METHOD_NOT_ALLOWED\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"METHOD_NOT_ALLOWED\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments/{{dep_id}}"
+                    }
+                },
+                {
+                    "name": "DEP.25 Journal : création du département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "const entry = pm.response.json().data[0] || {};",
+                                    "pm.test(\"Entrée « admin.department.created » produite par cette exécution\", function () {",
+                                    "    pm.expect(entry.event && entry.event.key).to.eql(\"admin.department.created\");",
+                                    "    const start = pm.collectionVariables.get('run_started_at');",
+                                    "    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }",
+                                    "});",
+                                    "pm.test(\"Auteur et département renseignés\", function () {",
+                                    "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "    pm.expect(entry.details.department.code).to.eql(pm.collectionVariables.get('dep_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/admin/audit-logs?event=admin.department.created"
+                    }
+                },
+                {
+                    "name": "DEP.26 Journal : désactivation du département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "const entry = pm.response.json().data[0] || {};",
+                                    "pm.test(\"Entrée « admin.department.deactivated » produite par cette exécution\", function () {",
+                                    "    pm.expect(entry.event && entry.event.key).to.eql(\"admin.department.deactivated\");",
+                                    "    const start = pm.collectionVariables.get('run_started_at');",
+                                    "    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }",
+                                    "});",
+                                    "pm.test(\"Auteur et département renseignés\", function () {",
+                                    "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "    pm.expect(entry.details.department.code).to.eql(pm.collectionVariables.get('dep_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/admin/audit-logs?event=admin.department.deactivated"
+                    }
+                },
+                {
+                    "name": "DEP.27 Déconnexion du Super Administrateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "CLIENTS (lot 2.1)",
+            "description": "Référentiel clients : champs obligatoires (C1), code généré (C2), visibilité selon le rôle (C3), code non modifiable et conservé (C4). Les clients créés portent le préfixe « POSTMAN », effacé à chaque remise à zéro des comptes de test.",
+            "item": [
+                {
+                    "name": "CLI.00 Cookie CSRF (Sanctum)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (!pm.collectionVariables.get('run_started_at')) { pm.collectionVariables.set('run_started_at', new Date().toISOString()); }"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});",
+                                    "pm.test(\"Jeton XSRF récupéré\", function () {",
+                                    "    pm.expect(pm.collectionVariables.get('xsrf_token')).to.be.a('string').and.not.empty;",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/sanctum/csrf-cookie"
+                    }
+                },
+                {
+                    "name": "CLI.00b Fermeture d'une session précédente",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Aucune session ouverte après cette requête (204 ou 401)\", function () {",
+                                    "    pm.expect(pm.response.code).to.be.oneOf([204, 401]);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "CLI.01 Connexion du Super Administrateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle super_admin)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"super_admin\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});",
+                                    "pm.collectionVariables.set('admin_id', pm.response.json().data.id);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{admin_email}}\",\n    \"password\": \"{{admin_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.02 Département de suivi",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Département de test retrouvé\", function () {",
+                                    "    const dep = pm.response.json().data.find(d => d.code === 'DEP-TEST');",
+                                    "    pm.expect(dep, 'DEP-TEST').to.be.an('object');",
+                                    "    pm.collectionVariables.set('dep_test_id', dep.id);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/departments"
+                    }
+                },
+                {
+                    "name": "CLI.03 Création refusée : champs invalides (C1, C2)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « name » : « au moins 3 caractères »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"name\");",
+                                    "    pm.expect(errors[\"name\"].join(' ')).to.include(\"au moins 3 caractères\");",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « code » : « généré automatiquement »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"code\");",
+                                    "    pm.expect(errors[\"code\"].join(' ')).to.include(\"généré automatiquement\");",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « department_ids » : « au moins un département »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"department_ids\");",
+                                    "    pm.expect(errors[\"department_ids\"].join(' ')).to.include(\"au moins un département\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"AB\",\n    \"code\": \"CLI-9999\",\n    \"department_ids\": []\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.04 Création refusée : département inconnu (C1)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « department_ids.0 » : « n'existe pas »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"department_ids.0\");",
+                                    "    pm.expect(errors[\"department_ids.0\"].join(' ')).to.include(\"n'existe pas\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"POSTMAN INCONNU\",\n    \"department_ids\": [\n        999999\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.05 Département de suivi distinct",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const code = 'PM-CLI-' + Date.now().toString(36).toUpperCase().slice(-7);",
+                                    "pm.collectionVariables.set('client_other_dep_code', code);"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "pm.test(\"Département créé et identifiant conservé\", function () {",
+                                    "    pm.collectionVariables.set('client_other_dep_id', pm.response.json().data.id);",
+                                    "    pm.expect(pm.response.json().data.is_active).to.eql(true);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/departments",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"{{client_other_dep_code}}\",\n    \"name\": \"Postman · Clients {{client_other_dep_code}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.06 Création d'un client (C1, C2)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const suffix = Date.now().toString(36).toUpperCase().slice(-6);",
+                                    "pm.collectionVariables.set('client_name', 'POSTMAN CLIENT ' + suffix);",
+                                    "pm.collectionVariables.set('client_name_input', ('postman client ' + suffix).toLowerCase());"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "pm.test(\"Code CLI généré, dénomination en majuscules et champs conservés\", function () {",
+                                    "    const c = pm.response.json().data;",
+                                    "    pm.expect(c.code).to.match(/^CLI-\\d{4,}$/);",
+                                    "    pm.expect(c.name).to.eql(pm.collectionVariables.get('client_name'));",
+                                    "    pm.expect(c.email).to.eql('contact@postman.test');",
+                                    "    pm.expect(c.legal_form).to.eql('SARL');",
+                                    "    pm.expect(c.sector).to.eql('Commerce de gros');",
+                                    "    pm.expect(c.tax_regime).to.eql('Réel normal');",
+                                    "    pm.expect(c.is_active).to.eql(true);",
+                                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                                    "    pm.expect(c.departments[0].code).to.eql('DEP-TEST');",
+                                    "    pm.expect(c.documents_count).to.eql(null);",
+                                    "    pm.expect(c.last_activity_at).to.eql(null);",
+                                    "    pm.collectionVariables.set('client_id', c.id);",
+                                    "    pm.collectionVariables.set('client_code', c.code);",
+                                    "});",
+                                    "pm.test(\"Auteur de la création renseigné\", function () {",
+                                    "    pm.expect(String(pm.response.json().data.created_by.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "});",
+                                    "pm.test(\"Message : « Client créé »\", function () {",
+                                    "    pm.expect(pm.response.json().message).to.include(\"Client créé\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"{{client_name_input}}\",\n    \"legal_form\": \"SARL\",\n    \"sector\": \"Commerce de gros\",\n    \"tax_regime\": \"Réel normal\",\n    \"rccm\": \"CI-ABJ-2026-B-00000\",\n    \"dfe\": \"0000000 X 0\",\n    \"address\": \"Cocody Riviera 3, Abidjan\",\n    \"phone\": \"+225 27 22 00 11 01\",\n    \"email\": \"CONTACT@POSTMAN.TEST\",\n    \"contact_name\": \"Adjoa KOUASSI\",\n    \"department_ids\": [\n        \"{{dep_test_id}}\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.07 Création d'un client d'un autre département (C3)",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const suffix = Date.now().toString(36).toUpperCase().slice(-6);",
+                                    "pm.collectionVariables.set('other_client_name', 'POSTMAN AUTRE DEPARTEMENT ' + suffix);"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "pm.test(\"Client rattaché au département distinct\", function () {",
+                                    "    const c = pm.response.json().data;",
+                                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                                    "    pm.expect(String(c.departments[0].id)).to.eql(String(pm.collectionVariables.get('client_other_dep_id')));",
+                                    "    pm.collectionVariables.set('other_client_id', c.id);",
+                                    "    pm.collectionVariables.set('other_client_code', c.code);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"{{other_client_name}}\",\n    \"sector\": \"Industrie\",\n    \"department_ids\": [\n        \"{{client_other_dep_id}}\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.08 Code non modifiable (C4)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 422\", function () {",
+                                    "    pm.response.to.have.status(422);",
+                                    "});",
+                                    "pm.test(\"Erreur sur le champ « code » : « pas modifiable »\", function () {",
+                                    "    const errors = pm.response.json().errors || {};",
+                                    "    pm.expect(errors, 'erreurs de validation').to.have.property(\"code\");",
+                                    "    pm.expect(errors[\"code\"].join(' ')).to.include(\"pas modifiable\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"code\": \"CLI-9999\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.09 Modification des champs et des départements",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Code inchangé, nouveaux champs appliqués\", function () {",
+                                    "    const c = pm.response.json().data;",
+                                    "    pm.expect(c.code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(c.name).to.eql(pm.collectionVariables.get('client_name') + ' MODIFIÉ');",
+                                    "    pm.expect(c.sector).to.eql('Industrie');",
+                                    "    pm.expect(c.departments).to.have.lengthOf(1);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"{{client_name}} MODIFIÉ\",\n    \"sector\": \"Industrie\",\n    \"department_ids\": [\n        \"{{dep_test_id}}\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.10 Détail d'un client",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Fiche complète et compteurs encore nuls\", function () {",
+                                    "    const c = pm.response.json().data;",
+                                    "    pm.expect(c).to.include.all.keys('id', 'code', 'name', 'legal_form', 'sector', 'tax_regime', 'rccm', 'dfe', 'address', 'phone', 'email', 'contact_name', 'is_active', 'departments', 'created_at', 'documents_count', 'last_activity_at');",
+                                    "    pm.expect(c.code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(c.documents_count).to.eql(null);",
+                                    "    pm.expect(c.last_activity_at).to.eql(null);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}"
+                    }
+                },
+                {
+                    "name": "CLI.11 Recherche par code",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Un seul client correspond au code\", function () {",
+                                    "    const list = pm.response.json().data;",
+                                    "    pm.expect(list).to.have.lengthOf(1);",
+                                    "    pm.expect(list[0].code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients?search={{client_code}}"
+                    }
+                },
+                {
+                    "name": "CLI.12 Filtre par département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Le client du département est présent, celui de l'autre département est absent\", function () {",
+                                    "    const list = pm.response.json().data;",
+                                    "    pm.expect(list.map(c => c.code)).to.include(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(list.map(c => c.code)).to.not.include(pm.collectionVariables.get('other_client_code'));",
+                                    "});",
+                                    "pm.test(\"Départements proposés dans le filtre\", function () {",
+                                    "    const deps = pm.response.json().departments;",
+                                    "    pm.expect(deps).to.be.an('array').that.is.not.empty;",
+                                    "    pm.expect(deps.map(d => d.code)).to.include('DEP-TEST');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients?department={{dep_test_id}}"
+                    }
+                },
+                {
+                    "name": "CLI.13 Aucune suppression possible (C4)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 405\", function () {",
+                                    "    pm.response.to.have.status(405);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur METHOD_NOT_ALLOWED\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"METHOD_NOT_ALLOWED\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}"
+                    }
+                },
+                {
+                    "name": "CLI.14 Journal : création du client",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "const entries = pm.response.json().data || [];",
+                                    "const expected = pm.collectionVariables.get('client_code');",
+                                    "const entry = entries.find(e => e.details && e.details.client && e.details.client.code === expected) || {};",
+                                    "pm.test(\"Entrée « admin.client.created » produite par cette exécution\", function () {",
+                                    "    pm.expect(entry.event && entry.event.key).to.eql(\"admin.client.created\");",
+                                    "    const start = pm.collectionVariables.get('run_started_at');",
+                                    "    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }",
+                                    "});",
+                                    "pm.test(\"Client et auteur renseignés\", function () {",
+                                    "    pm.expect(entry.details.client.code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "    pm.expect(entry.details.departments).to.include('DEP-TEST');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/admin/audit-logs?event=admin.client.created"
+                    }
+                },
+                {
+                    "name": "CLI.15 Journal : modification du client",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "const entries = pm.response.json().data || [];",
+                                    "const expected = pm.collectionVariables.get('client_code');",
+                                    "const entry = entries.find(e => e.details && e.details.client && e.details.client.code === expected) || {};",
+                                    "pm.test(\"Entrée « admin.client.updated » produite par cette exécution\", function () {",
+                                    "    pm.expect(entry.event && entry.event.key).to.eql(\"admin.client.updated\");",
+                                    "    const start = pm.collectionVariables.get('run_started_at');",
+                                    "    if (start) { pm.expect(new Date(entry.occurred_at).getTime()).to.be.at.least(new Date(start).getTime() - 120000); }",
+                                    "});",
+                                    "pm.test(\"Client et auteur renseignés\", function () {",
+                                    "    pm.expect(entry.details.client.code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(String(entry.actor && entry.actor.id)).to.eql(String(pm.collectionVariables.get('admin_id')));",
+                                    "    pm.expect(entry.details.changes).to.have.property('sector');",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/admin/audit-logs?event=admin.client.updated"
+                    }
+                },
+                {
+                    "name": "CLI.16 Déconnexion du Super Administrateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "CLI.17 Connexion du Directeur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle directeur)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"directeur\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{director_email}}\",\n    \"password\": \"{{director_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.18 Le Directeur voit tout le cabinet (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Les deux clients sont visibles\", function () {",
+                                    "    const codes = pm.response.json().data.map(c => c.code);",
+                                    "    pm.expect(codes).to.include(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(codes).to.include(pm.collectionVariables.get('other_client_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients"
+                    }
+                },
+                {
+                    "name": "CLI.19 Création refusée au Directeur (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"POSTMAN REFUS DIRECTEUR\",\n    \"department_ids\": [\n        \"{{dep_test_id}}\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.20 Modification refusée au Directeur (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"POSTMAN REFUS DIRECTEUR\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.21 Déconnexion du Directeur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
+                },
+                {
+                    "name": "CLI.22 Connexion du collaborateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Profil complet (rôle collaborateur)\", function () {",
+                                    "    const d = pm.response.json().data;",
+                                    "    pm.expect(d).to.include.all.keys('id', 'name', 'email', 'role', 'permissions', 'department', 'must_change_password', 'last_login_at');",
+                                    "    pm.expect(d.permissions, 'permissions').to.be.an('array');",
+                                    "    pm.expect(d, 'aucun mot de passe exposé').to.not.have.property('password');",
+                                    "    pm.expect(d.role.key).to.eql(\"collaborateur\");",
+                                    "    pm.expect(d.must_change_password, 'mot de passe à changer').to.eql(false);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/auth/login",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{lockout_email}}\",\n    \"password\": \"{{lockout_password}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.23 Le collaborateur ne voit que son département (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Client de son département présent, client extérieur absent\", function () {",
+                                    "    const codes = pm.response.json().data.map(c => c.code);",
+                                    "    pm.expect(codes).to.include(pm.collectionVariables.get('client_code'));",
+                                    "    pm.expect(codes).to.not.include(pm.collectionVariables.get('other_client_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients"
+                    }
+                },
+                {
+                    "name": "CLI.24 Fiche autorisée dans son département",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Code attendu\", function () {",
+                                    "    pm.expect(pm.response.json().data.code).to.eql(pm.collectionVariables.get('client_code'));",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients/{{client_id}}"
+                    }
+                },
+                {
+                    "name": "CLI.25 Fiche refusée hors de son département (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/clients/{{other_client_id}}"
+                    }
+                },
+                {
+                    "name": "CLI.26 Création refusée au collaborateur (C3)",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 403\", function () {",
+                                    "    pm.response.to.have.status(403);",
+                                    "});",
+                                    "pm.test(\"Code d'erreur FORBIDDEN\", function () {",
+                                    "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "url": "{{base_url}}/api/v1/clients",
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"POSTMAN REFUS COLLABORATEUR\",\n    \"department_ids\": [\n        \"{{dep_test_id}}\"\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "name": "CLI.27 Déconnexion du collaborateur",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Code HTTP 204\", function () {",
+                                    "    pm.response.to.have.status(204);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": "{{base_url}}/api/v1/auth/logout"
+                    }
                 }
             ]
         }

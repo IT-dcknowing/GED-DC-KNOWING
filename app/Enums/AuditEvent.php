@@ -21,6 +21,13 @@ enum AuditEvent: string
     case UserActivated = 'admin.user.activated';
     case UserPasswordReset = 'admin.user.password_reset';
     case UserUnlocked = 'admin.user.unlocked';
+    case DepartmentCreated = 'admin.department.created';
+    case DepartmentUpdated = 'admin.department.updated';
+    case DepartmentDeactivated = 'admin.department.deactivated';
+    case DepartmentActivated = 'admin.department.activated';
+    case DepartmentManagerRemoved = 'admin.department.manager_removed';
+    case ClientCreated = 'admin.client.created';
+    case ClientUpdated = 'admin.client.updated';
 
     public function label(): string
     {
@@ -39,6 +46,13 @@ enum AuditEvent: string
             self::UserActivated => 'Activation de compte',
             self::UserPasswordReset => 'Mot de passe temporaire régénéré',
             self::UserUnlocked => 'Déverrouillage de compte',
+            self::DepartmentCreated => 'Création de département',
+            self::DepartmentUpdated => 'Modification de département',
+            self::DepartmentDeactivated => 'Désactivation de département',
+            self::DepartmentActivated => 'Activation de département',
+            self::DepartmentManagerRemoved => 'Retrait automatique du responsable de département',
+            self::ClientCreated => 'Création de client',
+            self::ClientUpdated => 'Modification de client',
         };
     }
 }

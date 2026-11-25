@@ -1,12 +1,12 @@
 # GED-DC-KNOWING : guide des tests de l'API avec Postman
 
-Ce guide permet de récupérer le projet, d'installer le backend Laravel en local et d'exécuter la collection Postman qui vérifie les fonctionnalités **réellement développées** à ce jour : l'**authentification** et l'**administration des comptes**. Les autres modules de la GED (explorateur, clients, validations, archives…) ne sont pas encore implémentés et n'ont donc aucune requête dans la collection.
+Ce guide permet de récupérer le projet, d'installer le backend Laravel en local et d'exécuter la collection Postman qui vérifie les fonctionnalités **réellement développées** à ce jour : l'**authentification**, l'**administration des comptes**, les **départements** et les **clients**. Les autres modules de la GED (explorateur, documents, validations, archives…) ne sont pas encore implémentés et n'ont donc aucune requête dans la collection.
 
 Fichiers concernés, tous dans `docs/postman/` :
 
 | Fichier | Rôle |
 |---------|------|
-| `GED-DC-KNOWING-API.postman_collection.json` | Collection : 76 requêtes et leurs tests automatiques |
+| `GED-DC-KNOWING-API.postman_collection.json` | Collection : 136 requêtes et leurs tests automatiques |
 | `GED-DC-KNOWING-LOCAL.postman_environment.json` | Environnement local : adresse du backend, comptes de test |
 | `scripts/build-collection.mjs` | Source de la collection et de l'environnement (voir section 13) |
 | `GUIDE-TESTS-API.md` | Ce guide |
@@ -98,13 +98,16 @@ Le dernier seeder crée les comptes ci-dessous. **Relancez-le avant chaque exéc
 |----------------|--------------|------|--------------|-------------|
 | `postman.admin@postman.test` | `PostmanAdmin2026` | Super Administrateur | actif | dossier 05 (administration) |
 | `postman.collaborateur@postman.test` | `PostmanCollab2026` | Collaborateur | actif | dossiers 02 et 08 |
-| `postman.directeur@postman.test` | `PostmanDirect2026` | Directeur du Cabinet | actif | dossier 10 (journal d'audit) |
+| `postman.directeur@postman.test` | `PostmanDirect2026` | Directeur du Cabinet | actif | dossier 10 (journal d'audit), CLIENTS |
 | `postman.desactive@postman.test` | `PostmanInactif2026` | Collaborateur | **désactivé** | dossiers 03 et 09 |
 | `postman.premiere@postman.test` | `PostmanTemp2026a` | Collaborateur | actif, **mot de passe à changer** | dossier 07 |
-| `postman.verrouillage@postman.test` | `PostmanVerrou2026` | Collaborateur | actif | dossiers 04 à 06 (verrouillage) |
+| `postman.verrouillage@postman.test` | `PostmanVerrou2026` | Collaborateur | actif | dossiers 04 à 06 (verrouillage), DEP.09 à DEP.11, CLIENTS |
 | `postman.reinit@postman.test` | `PostmanReinit2026` | Collaborateur | actif | dossiers 09 et 11 (mot de passe oublié) |
+| `postman.responsable@postman.test` | `PostmanRespDep2026` | Responsable de Département | actif, responsable du département de test | dossier DÉPARTEMENTS |
 
 L'adresse `postman.inconnu@postman.test` n'a volontairement aucun compte : elle sert aux tests « adresse inconnue ».
+
+Le seeder remet aussi le département de test `DEP-TEST` dans son état initial (actif, avec `postman.responsable@postman.test` pour responsable) et efface les départements créés par la collection (codes commençant par `PM-`).
 
 ## 6. Démarrer le serveur Laravel
 
@@ -119,6 +122,32 @@ Contrôle : http://localhost:8004/api/v1/health doit répondre `{"status":"ok","
 Dans Postman : **Import**, puis glissez le fichier `docs/postman/GED-DC-KNOWING-API.postman_collection.json`.
 
 La collection contient un dossier **AUTHENTIFICATION**, découpé en sous-dossiers numérotés de 00 à 11. Les numéros entre parenthèses dans le nom des requêtes (A1… H1) renvoient aux 35 règles d'authentification (section 12).
+
+Le sous-dossier 05 (administration des comptes) contient aussi les contrôles du module « Utilisateurs et rôles » :
+
+- 05.2 : liste des 7 rôles avec leur description, leurs permissions et le nombre de comptes, plus le catalogue des 17 permissions ;
+- 05.4b : recherche contenant « % », prise littéralement (A2) ;
+- 05.7 et 05.8 : date et auteur de la création du compte (A4) ;
+- 05.11b : refus de modifier son propre rôle (A1).
+
+Le dossier **DÉPARTEMENTS (lot 1.3)** vient après. Il peut aussi être exécuté seul (`-i "DÉPARTEMENTS (lot 1.3)"`), car il récupère lui-même le cookie CSRF. Il vérifie :
+
+- DEP.01 à DEP.11 : la consultation selon le rôle (D1). Le Directeur voit tous les départements mais ne peut pas en créer ; le Responsable de Département ne voit que le sien ; le Collaborateur est refusé ;
+- DEP.12 à DEP.16 : la création par le Super Administrateur (D2), avec le code mis en majuscules, unique et non modifiable (D7) ;
+- DEP.17 à DEP.20 : le responsable (D4), avec le refus d'un compte rattaché à un autre département ou de rôle Collaborateur, puis le retrait et la désignation ;
+- DEP.21 à DEP.24 : la désactivation (D6), refusée tant que des comptes actifs sont rattachés, puis la désactivation, la réactivation et l'absence de suppression ;
+- DEP.25 et DEP.26 : le journal d'audit (création et désactivation du département).
+
+Le dossier **CLIENTS (lot 2.1)** vient ensuite. Il peut aussi être exécuté seul (`-i "CLIENTS (lot 2.1)"`). Il vérifie :
+
+- CLI.03 et CLI.04 : les champs obligatoires (C1) et le refus d'un département inconnu ;
+- CLI.05 à CLI.07 : la création d'un département de suivi distinct, puis de deux clients, avec code `CLI-…` généré (C2), dénomination en majuscules et compteurs de documents encore nuls ;
+- CLI.08 et CLI.09 : le code non modifiable (C4), puis la modification des champs et des départements ;
+- CLI.10 à CLI.12 : la fiche, la recherche par code et le filtre par département ;
+- CLI.13 : l'absence de route de suppression (C4) ;
+- CLI.14 et CLI.15 : le journal d'audit (création et modification du client) ;
+- CLI.17 à CLI.21 : le Directeur voit tout le cabinet, mais ne peut ni créer ni modifier un client ;
+- CLI.22 à CLI.27 : le Collaborateur ne voit que son département (C3), consulte la fiche autorisée, reçoit un refus hors périmètre et ne peut pas créer de client.
 
 ## 8. Importer l'environnement
 
@@ -151,7 +180,7 @@ Ne renseignez jamais de vrai mot de passe ni de jeton dans le fichier d'environn
 1. Relancez `php artisan db:seed --class=PostmanTestAccountsSeeder`.
 2. Cliquez sur la collection, puis sur **Run**.
 3. Gardez l'ordre des requêtes, et réglez **Delay** sur **3500 ms**.
-4. Lancez l'exécution (5 à 6 minutes environ).
+4. Lancez l'exécution (10 à 12 minutes environ).
 
 **Pourquoi 3 500 ms ?** L'API limite les tentatives : 20 connexions par minute et par adresse IP, 5 demandes de réinitialisation par minute, 5 changements de mot de passe par minute et par compte. Sans délai, vous obtiendrez des erreurs 429, qui sont le comportement normal de l'API.
 
@@ -159,7 +188,8 @@ Ne renseignez jamais de vrai mot de passe ni de jeton dans le fichier d'environn
 - tous ont besoin du cookie CSRF obtenu en 00.2 ;
 - 05.4 attend le verrouillage provoqué en 04 ;
 - 06 attend le déverrouillage fait en 05.5 ;
-- le dossier 10 vérifie des événements produits par les dossiers précédents.
+- le dossier 10 vérifie des événements produits par les dossiers précédents ;
+- le dossier CLIENTS s'appuie sur le département `DEP-TEST` et les comptes créés par le seeder ; il crée ses propres clients et un département `PM-CLI-…`, effacés à la remise à zéro suivante.
 
 Seul le dossier 11 se lance à part (section 10.3).
 
@@ -212,12 +242,12 @@ Chaque requête vérifie au minimum :
 
 Les contrôles du journal d'audit vérifient en plus que l'entrée trouvée date bien de l'exécution en cours.
 
-**Résultat de référence**, obtenu le 24/11/2026 sur un poste local avec Postman CLI 1.74 :
+**Résultat de référence**, obtenu le 25/11/2026 sur un poste local avec Postman CLI 1.74 :
 
 | Exécution | Requêtes envoyées | Vérifications | Échecs |
 |-----------|-------------------|---------------|--------|
-| Collection complète, sans jeton de réinitialisation | 77 (dont 2 + 3 répétitions en boucle) ; 4 requêtes manuelles ignorées | 250 | 0 |
-| Dossier 11 seul, avec le jeton | 5 | 13 | 0 |
+| Collection complète, sans jeton de réinitialisation | 137 (136 requêtes, dont une répétée en boucle) ; 4 requêtes manuelles ignorées | 438 | 0 |
+| Dossier 11 seul, avec le jeton (exécution du 24/11/2026, dossier inchangé depuis) | 5 | 13 | 0 |
 
 **Causes d'échec fréquentes :**
 

@@ -5,6 +5,7 @@ namespace App\Services\Security;
 use App\Enums\AuditEvent;
 use App\Enums\RoleName;
 use App\Models\User;
+use App\Services\Organisation\DepartmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -18,6 +19,7 @@ class UserAdministrationService
         private readonly SessionInvalidator $sessions,
         private readonly LoginLockoutService $lockouts,
         private readonly AuditLogger $audit,
+        private readonly DepartmentService $departments,
     ) {}
 
     /**
@@ -63,6 +65,13 @@ class UserAdministrationService
         $newRole = $data['role'] ?? $previousRole;
         $roleChanged = $newRole !== $previousRole;
 
+        // Un administrateur ne modifie pas son propre rôle : il perdrait ses droits et sa session en cours.
+        if ($roleChanged && $user->is($actor)) {
+            throw ValidationException::withMessages([
+                'role' => 'Vous ne pouvez pas modifier votre propre rôle. Demandez-le à un autre Super Administrateur.',
+            ]);
+        }
+
         DB::transaction(function () use ($user, $data, $roleChanged, $newRole) {
             if ($roleChanged && $user->is_active && $user->isSuperAdmin()) {
                 $this->ensureAnotherActiveSuperAdminExists($user, 'role',
@@ -87,6 +96,11 @@ class UserAdministrationService
 
         $this->audit->log(AuditEvent::UserUpdated, true, $user, details: $details, actor: $actor);
 
+        // D4 : un responsable de département qui change de rôle ou de département perd sa désignation.
+        if ($roleChanged || in_array('department_id', $changes, true)) {
+            $this->departments->releaseIneligibleManagership($user, $actor);
+        }
+
         return $user->fresh(['department']);
     }
 
@@ -109,6 +123,9 @@ class UserAdministrationService
 
         $closed = $this->sessions->forUser($user);
         $this->audit->log(AuditEvent::UserDeactivated, true, $user, details: ['sessions_closed' => $closed], actor: $actor);
+
+        // D4 : un compte désactivé ne peut plus être responsable de département.
+        $this->departments->releaseIneligibleManagership($user, $actor);
 
         return $user->fresh(['department']);
     }

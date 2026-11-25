@@ -35,6 +35,22 @@ enum RoleName: string
     }
 
     /**
+     * Responsabilités du rôle, reprises du cahier des charges (section 6).
+     */
+    public function description(): string
+    {
+        return match ($this) {
+            self::SuperAdmin => 'Paramétrage global, comptes, rôles, référentiels et supervision technique.',
+            self::Director => 'Vision transversale, supervision des départements et clients, consultation des indicateurs et arbitrages.',
+            self::GedManager => 'Organisation documentaire, contrôle du classement, suivi des anomalies et administration des archives.',
+            self::DepartmentManager => 'Gestion des collaborateurs de son département, suivi des clients affectés et validation des documents de son périmètre.',
+            self::Collaborator => 'Dépôt, consultation et modification des documents autorisés dans les espaces qui lui sont affectés.',
+            self::Intern => 'Accès limité aux dossiers et actions explicitement autorisés ; pas de validation ni d\'administration par défaut.',
+            self::Auditor => 'Consultation seule des espaces et documents explicitement ouverts à son profil.',
+        };
+    }
+
+    /**
      * Rôles qui voient tout le cabinet sans restriction de département.
      */
     public function hasCabinetWideScope(): bool

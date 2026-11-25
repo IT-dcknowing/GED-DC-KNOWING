@@ -83,11 +83,31 @@ class DevelopmentAccountsSeeder extends Seeder
             $this->created[] = [$role->label(), $email, $temporary];
         }
 
+        $this->assignTestDepartmentManager($department);
+
         if (isset($this->command)) {
             $this->command->newLine();
             $this->command->warn('Comptes de TEST (développement uniquement). Mots de passe temporaires affichés une seule fois :');
             $this->command->table(['Rôle', 'Adresse e-mail', 'Mot de passe temporaire'], $this->created);
             $this->command->info('Chaque compte devra choisir son propre mot de passe à la première connexion.');
         }
+    }
+
+    /**
+     * Le département de test reçoit pour responsable le compte de test « Responsable de Département »,
+     * s'il n'en a pas déjà un et si ce compte remplit les conditions (décision D4).
+     */
+    private function assignTestDepartmentManager(Department $department): void
+    {
+        $manager = User::where('email', 'responsable.departement@'.self::DOMAIN)->first();
+
+        if ($department->manager_id !== null || $manager === null || ! $manager->is_active
+            || $manager->roleName() !== RoleName::DepartmentManager
+            || (int) $manager->department_id !== (int) $department->id
+            || Department::where('manager_id', $manager->id)->exists()) {
+            return;
+        }
+
+        $department->forceFill(['manager_id' => $manager->id])->save();
     }
 }

@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 
 import { routes } from '@/app/router';
+import { ToastProvider } from '@/components/ui/Toast';
 
 /** Affiche l'application complète (routes réelles) à l'adresse donnée. */
 export function renderApp(initialPath = '/') {
@@ -13,7 +14,9 @@ export function renderApp(initialPath = '/') {
 
     const result = render(
         <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            <ToastProvider>
+                <RouterProvider router={router} />
+            </ToastProvider>
         </QueryClientProvider>,
     );
 
