@@ -6,7 +6,7 @@ use App\Enums\AuditEvent;
 use App\Models\Document;
 use App\Models\Folder;
 use App\Models\User;
-use App\Services\Audit\AuditLogger;
+use App\Services\Security\AuditLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -15,9 +15,7 @@ use InvalidArgumentException;
 
 class DocumentStorageService
 {
-    public function __construct(private readonly AuditLogger $audit)
-    {
-    }
+    public function __construct(private readonly AuditLogger $audit) {}
 
     public function store(
         Folder $folder,

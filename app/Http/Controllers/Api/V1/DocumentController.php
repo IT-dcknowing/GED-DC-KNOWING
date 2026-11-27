@@ -8,8 +8,8 @@ use App\Http\Requests\Documents\StoreDocumentRequest;
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Models\Folder;
-use App\Services\Audit\AuditLogger;
 use App\Services\Documents\DocumentStorageService;
+use App\Services\Security\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -22,8 +22,7 @@ class DocumentController extends Controller
     public function __construct(
         private readonly DocumentStorageService $service,
         private readonly AuditLogger $audit,
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
