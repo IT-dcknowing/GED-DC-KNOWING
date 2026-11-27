@@ -12,7 +12,10 @@ export type DocumentItem = {
     extension: string;
     mime_type: string;
     size_bytes: number;
-    uploaded_by: { id: number; name: string } | null;
+    uploaded_by: {
+        id: number;
+        name: string;
+    } | null;
     can_download: boolean;
     can_delete: boolean;
     created_at: string | null;
@@ -52,14 +55,15 @@ export async function downloadDocument(doc: DocumentItem): Promise<void> {
     const response = await api.get<Blob>(`/documents/${doc.id}/download`, {
         responseType: 'blob',
     });
-    const url = window.URL.createObjectURL(response.data);
+
+    const blobUrl = URL.createObjectURL(response.data);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = doc.normalized_name;
+    link.href = blobUrl;
+    link.download = doc.normalized_name || doc.original_name;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    window.URL.revokeObjectURL(url);
+    URL.revokeObjectURL(blobUrl);
 }
 
 export async function deleteDocument(id: number): Promise<void> {

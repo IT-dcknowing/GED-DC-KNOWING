@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 
 import {
+    deleteDocument,
+    downloadDocument,
+    fetchDocuments,
+    type DocumentItem,
+} from '@/api/documents';
+import {
     createFolder,
     deleteFolder,
     fetchFolderDetails,
@@ -74,6 +80,13 @@ export function ExplorerPage() {
     const subfoldersQuery = useQuery({
         queryKey: ['folders', 'children', activeFolderId],
         queryFn: () => fetchFolders(activeFolderId),
+        enabled: activeFolderId !== null,
+    });
+
+    // 4. Documents de l'emplacement courant
+    const documentsQuery = useQuery({
+        queryKey: ['documents', activeFolderId],
+        queryFn: () => fetchDocuments(activeFolderId!),
         enabled: activeFolderId !== null,
     });
 
@@ -184,6 +197,40 @@ export function ExplorerPage() {
             });
         },
     });
+
+    const deleteDocumentMutation = useMutation({
+        mutationFn: (doc: DocumentItem) => deleteDocument(doc.id),
+        onSuccess: () => {
+            toast({ tone: 'success', title: 'Document supprimé', message: 'Le document a été supprimé.' });
+            queryClient.invalidateQueries({ queryKey: ['documents', activeFolderId] });
+            queryClient.invalidateQueries({ queryKey: ['folders'] });
+        },
+        onError: (err: any) => {
+            toast({
+                tone: 'error',
+                title: 'Erreur',
+                message: err?.response?.data?.message || 'Erreur lors de la suppression du document.',
+            });
+        },
+    });
+
+    const handleDownloadDocument = async (doc: DocumentItem) => {
+        try {
+            await downloadDocument(doc);
+        } catch (err: any) {
+            toast({
+                tone: 'error',
+                title: 'Erreur de téléchargement',
+                message: err?.response?.data?.message || 'Impossible de télécharger ce document.',
+            });
+        }
+    };
+
+    const handleDeleteDocument = (doc: DocumentItem) => {
+        if (confirm(`Êtes-vous sûr de vouloir supprimer le document "${doc.normalized_name}" ?`)) {
+            deleteDocumentMutation.mutate(doc);
+        }
+    };
 
     const handleSelectFolder = (folder: FolderItem) => {
         setActiveFolderId(folder.id);
@@ -309,6 +356,8 @@ export function ExplorerPage() {
                 spaceTitle={treePaneData.title}
                 currentFolder={currentFolder}
                 subfolders={subfolders}
+                documents={documentsQuery.data || []}
+                isDocumentsLoading={documentsQuery.isLoading}
                 breadcrumbs={breadcrumbs}
                 onSelectFolder={handleSelectFolder}
                 onNavigateBreadcrumb={handleNavigateBreadcrumb}
@@ -316,6 +365,8 @@ export function ExplorerPage() {
                 onOpenUploadPreview={(file) => setUploadPreviewState({ open: true, file: file || null })}
                 onOpenRename={(f) => setRenameFolderTarget(f)}
                 onDeleteFolder={handleDelete}
+                onDownloadDocument={handleDownloadDocument}
+                onDeleteDocument={handleDeleteDocument}
                 onToggleDetails={() => setIsDetailsOpen(!isDetailsOpen)}
                 isDetailsOpen={isDetailsOpen}
             />

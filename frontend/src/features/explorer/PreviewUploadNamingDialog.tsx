@@ -1,6 +1,10 @@
-import { AlertCircle, CheckCircle2, Info, Sparkles, UploadCloud, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, CheckCircle2, Loader2, Sparkles, UploadCloud, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
+import { apiErrorMessage } from '@/api/client';
+import { uploadDocument } from '@/api/documents';
 import type { FolderItem } from '@/api/folders';
+import { useToast } from '@/components/ui/Toast';
 
 type Props = {
     folder: FolderItem;
@@ -37,25 +41,59 @@ const STATUS_SUFFIXES = [
 ];
 
 export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose }: Props) {
+    const toast = useToast();
+    const queryClient = useQueryClient();
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const clientCode = folder.client?.code || 'CABINET';
 
     const initialExt = initialFile ? (initialFile.name.split('.').pop() || 'pdf') : 'pdf';
     const initialSubject = initialFile
         ? initialFile.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30)
-        : 'Constitution_Societe';
+        : '';
 
     const [docType, setDocType] = useState('STATUTS');
     const [subject, setSubject] = useState(initialSubject);
     const [statusSuffix, setStatusSuffix] = useState('SIGNE');
     const [extension, setExtension] = useState(initialExt);
     const [dragActive, setDragActive] = useState(false);
-    const [simulatedFile, setSimulatedFile] = useState<string | null>(initialFile ? initialFile.name : null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(initialFile ?? null);
     const [fileSizeLabel, setFileSizeLabel] = useState<string | null>(
-        initialFile ? `${(initialFile.size / (1024 * 1024)).toFixed(2)} Mo` : null
+        initialFile
+            ? initialFile.size >= 1024 * 1024
+                ? `${(initialFile.size / (1024 * 1024)).toFixed(2)} Mo`
+                : `${Math.max(1, Math.round(initialFile.size / 1024))} Ko`
+            : null
     );
     const [fileError, setFileError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const uploadMutation = useMutation({
+        mutationFn: () => {
+            if (!selectedFile) {
+                throw new Error('Aucun fichier sélectionné.');
+            }
+            return uploadDocument({
+                folder_id: folder.id,
+                file: selectedFile,
+                doc_type: docType,
+                status_suffix: statusSuffix,
+                subject: subject.trim(),
+            });
+        },
+        onSuccess: (doc) => {
+            toast({
+                tone: 'success',
+                title: 'Document déposé',
+                message: `Le fichier "${doc.normalized_name}" a été enregistré.`,
+            });
+            queryClient.invalidateQueries({ queryKey: ['documents', folder.id] });
+            queryClient.invalidateQueries({ queryKey: ['folders'] });
+            onClose();
+        },
+        onError: (err: unknown) => {
+            setFileError(apiErrorMessage(err));
+        },
+    });
 
     const generatedFilename = useMemo(() => {
         const cleanSubject = subject.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'Document';
@@ -71,7 +109,7 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
             return;
         }
         setFileError(null);
-        setSimulatedFile(file.name);
+        setSelectedFile(file);
         setFileSizeLabel(
             file.size >= 1024 * 1024
                 ? `${(file.size / (1024 * 1024)).toFixed(2)} Mo`
@@ -80,7 +118,7 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
         const ext = file.name.split('.').pop() || 'pdf';
         setExtension(ext);
         const base = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-        if (base) {
+        if (base && !subject.trim()) {
             setSubject(base.slice(0, 30));
         }
     };
@@ -113,7 +151,7 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
                             <div className="flex items-center gap-2">
                                 <h2 className="text-[16px] font-bold text-ebene font-display">Déposer un document</h2>
                                 <span className="rounded-full bg-sable border border-contour px-2 py-0.5 text-[10px] font-bold text-or-brun uppercase tracking-wider">
-                                    Lot 2.2 · Prévisualisation
+                                    Dépôt normalisé
                                 </span>
                             </div>
                             <p className="text-xs text-ink-2 truncate max-w-[340px]">
@@ -136,7 +174,7 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
                         <input
                             ref={fileInputRef}
                             type="file"
-                            accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                             onChange={handleFileInputChange}
                             className="hidden"
                         />
@@ -155,16 +193,16 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
                             onDrop={handleFileDrop}
                             className={`cursor-pointer rounded-xl border-2 border-dashed p-5 text-center transition-all ${dragActive
                                 ? 'border-or bg-sable'
-                                : simulatedFile
+                                : selectedFile
                                     ? 'border-ok bg-ok-bg/40'
                                     : 'border-contour bg-gradient-to-b from-sable/60 to-naturel hover:border-or'
                                 }`}
                         >
-                            <UploadCloud className={`mx-auto h-7 w-7 mb-2 ${simulatedFile ? 'text-ok' : 'text-or-brun'}`} />
-                            {simulatedFile ? (
+                            <UploadCloud className={`mx-auto h-7 w-7 mb-2 ${selectedFile ? 'text-ok' : 'text-or-brun'}`} />
+                            {selectedFile ? (
                                 <div>
                                     <p className="text-xs font-semibold text-ok">
-                                        Fichier sélectionné : {simulatedFile} {fileSizeLabel ? `(${fileSizeLabel})` : ''}
+                                        Fichier sélectionné : {selectedFile.name} {fileSizeLabel ? `(${fileSizeLabel})` : ''}
                                     </p>
                                     <p className="text-[11px] text-ink-2 mt-1">
                                         Cliquez ou glissez un autre fichier pour remplacer
@@ -175,7 +213,7 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
                                     <p className="text-[13px] font-semibold text-ebene">
                                         Glissez un document ici ou cliquez pour parcourir
                                     </p>
-                                    <p className="text-[11px] text-ink-2 mt-1">PDF, DOCX, XLSX, PNG, JPG (max 25 Mo)</p>
+                                    <p className="text-[11px] text-ink-2 mt-1">PDF, DOC, DOCX, XLS, XLSX, PNG, JPG (max 25 Mo)</p>
                                 </div>
                             )}
                         </div>
@@ -254,29 +292,30 @@ export function PreviewUploadNamingDialog({ folder, isOpen, initialFile, onClose
                         </p>
                     </div>
 
-                    {/* Note informative Lot 2.2 vs Lot 3.2 */}
-                    <div className="flex items-start gap-2.5 rounded-xl border border-line bg-naturel p-3 text-xs text-ink-2 leading-relaxed">
-                        <Info className="h-4 w-4 shrink-0 text-or-brun mt-0.5" />
-                        <div>
-                            <span className="font-semibold text-ebene">Phase 2.2 active :</span> La structure de classement et la prévisualisation du nommage sont opérationnelles. L'enregistrement physique des fichiers sera branché au <strong>Lot 3.2</strong>.
-                        </div>
-                    </div>
-
                     <div className="flex items-center justify-end gap-3 pt-3 border-t border-line-soft">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="rounded-lg border border-line bg-white px-4 py-2 text-xs font-semibold text-ink hover:bg-sable transition-colors"
+                            disabled={uploadMutation.isPending}
+                            className="rounded-lg border border-line bg-white px-4 py-2 text-xs font-semibold text-ink hover:bg-sable transition-colors disabled:opacity-50"
                         >
-                            Fermer
+                            Annuler
                         </button>
                         <button
                             type="button"
-                            onClick={onClose}
-                            className="flex items-center gap-2 rounded-lg bg-or px-4 py-2 text-xs font-bold text-ebene shadow-sm hover:bg-[#b8921f] transition-all"
+                            disabled={!selectedFile || subject.trim().length < 2 || uploadMutation.isPending}
+                            onClick={() => {
+                                setFileError(null);
+                                uploadMutation.mutate();
+                            }}
+                            className="flex items-center gap-2 rounded-lg bg-or px-4 py-2 text-xs font-bold text-ebene shadow-sm hover:bg-[#b8921f] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Valider l'aperçu
+                            {uploadMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                            )}
+                            {uploadMutation.isPending ? 'Enregistrement…' : 'Déposer le document'}
                         </button>
                     </div>
                 </div>

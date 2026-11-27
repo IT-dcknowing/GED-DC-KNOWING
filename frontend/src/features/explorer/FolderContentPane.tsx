@@ -1,11 +1,29 @@
-import { ChevronRight, Edit3, Folder, FolderPlus, Info, PanelRightOpen, Search, ShieldAlert, Trash2, UploadCloud } from 'lucide-react';
+import {
+    ChevronRight,
+    Download,
+    Edit3,
+    FileText,
+    Folder,
+    FolderPlus,
+    Info,
+    Loader2,
+    PanelRightOpen,
+    Search,
+    ShieldAlert,
+    Trash2,
+    UploadCloud,
+} from 'lucide-react';
 import { useState } from 'react';
+import type { DocumentItem } from '@/api/documents';
 import type { FolderBreadcrumb, FolderItem } from '@/api/folders';
+import { formatDateTime } from '@/lib/format';
 
 type Props = {
     spaceTitle: string;
     currentFolder: FolderItem | null;
     subfolders: FolderItem[];
+    documents: DocumentItem[];
+    isDocumentsLoading?: boolean;
     breadcrumbs: FolderBreadcrumb[];
     onSelectFolder: (folder: FolderItem) => void;
     onNavigateBreadcrumb: (item: FolderBreadcrumb) => void;
@@ -13,14 +31,25 @@ type Props = {
     onOpenUploadPreview: (droppedFile?: File | null) => void;
     onOpenRename: (folder: FolderItem) => void;
     onDeleteFolder: (folder: FolderItem) => void;
+    onDownloadDocument: (doc: DocumentItem) => void;
+    onDeleteDocument: (doc: DocumentItem) => void;
     onToggleDetails: () => void;
     isDetailsOpen: boolean;
 };
+
+function formatFileSize(bytes: number): string {
+    if (bytes >= 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
+    }
+    return `${Math.max(1, Math.round(bytes / 1024))} Ko`;
+}
 
 export function FolderContentPane({
     spaceTitle,
     currentFolder,
     subfolders,
+    documents,
+    isDocumentsLoading = false,
     breadcrumbs,
     onSelectFolder,
     onNavigateBreadcrumb,
@@ -28,25 +57,38 @@ export function FolderContentPane({
     onOpenUploadPreview,
     onOpenRename,
     onDeleteFolder,
+    onDownloadDocument,
+    onDeleteDocument,
     onToggleDetails,
     isDetailsOpen,
 }: Props) {
     const [search, setSearch] = useState('');
     const [dragOver, setDragOver] = useState(false);
 
+    const searchLower = search.trim().toLowerCase();
     const filteredSubfolders = subfolders.filter((f) =>
-        f.name.toLowerCase().includes(search.toLowerCase()) ||
-        (f.description && f.description.toLowerCase().includes(search.toLowerCase()))
+        f.name.toLowerCase().includes(searchLower) ||
+        (f.description && f.description.toLowerCase().includes(searchLower))
+    );
+    const filteredDocuments = documents.filter((d) =>
+        d.normalized_name.toLowerCase().includes(searchLower) ||
+        d.original_name.toLowerCase().includes(searchLower) ||
+        d.subject.toLowerCase().includes(searchLower) ||
+        d.doc_type.toLowerCase().includes(searchLower) ||
+        d.status_suffix.toLowerCase().includes(searchLower)
     );
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setDragOver(false);
+        if (!currentFolder?.can_upload) {
+            return;
+        }
         const file = e.dataTransfer.files?.[0] ?? null;
         onOpenUploadPreview(file);
     };
 
-    const isEmptyCustom = currentFolder && !currentFolder.is_locked && subfolders.length === 0;
+    const isEmptyCustom = currentFolder && !currentFolder.is_locked && subfolders.length === 0 && documents.length === 0;
 
     return (
         <main className="flex-1 min-w-0 bg-naturel/40 flex flex-col h-full overflow-y-auto px-6 py-4">
@@ -84,6 +126,8 @@ export function FolderContentPane({
                     </h1>
                     <div className="text-[13px] text-ink-2 mt-0.5 flex items-center gap-2">
                         <span>{filteredSubfolders.length} sous-dossier(s)</span>
+                        <span>·</span>
+                        <span>{filteredDocuments.length} document(s)</span>
                         {currentFolder && (
                             <>
                                 <span>·</span>
@@ -139,14 +183,16 @@ export function FolderContentPane({
                         </button>
                     )}
 
-                    <button
-                        type="button"
-                        onClick={() => onOpenUploadPreview(null)}
-                        className="inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-lg bg-or text-ebene text-[13px] font-bold shadow-xs hover:bg-[#b8921f] transition-colors"
-                    >
-                        <UploadCloud className="h-4 w-4" />
-                        Déposer
-                    </button>
+                    {currentFolder?.can_upload && (
+                        <button
+                            type="button"
+                            onClick={() => onOpenUploadPreview(null)}
+                            className="inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-lg bg-or text-ebene text-[13px] font-bold shadow-xs hover:bg-[#b8921f] transition-colors"
+                        >
+                            <UploadCloud className="h-4 w-4" />
+                            Déposer
+                        </button>
+                    )}
 
                     {!isDetailsOpen && (
                         <button
@@ -271,13 +317,91 @@ export function FolderContentPane({
                 </div>
             )}
 
-            {/* Zone documents (prête pour le Lot 3.2) */}
-            <div className="rounded-[10px] border border-line bg-white p-8 text-center text-ink-3 text-[13px]">
-                Aucun document classé dans ce dossier pour le moment.
-                <div className="text-[11.5px] mt-1 text-ink-3/80">
-                    La liste et le stockage physique des documents seront activés au Lot 3.2. Utilisez le bouton <b>Déposer</b> ci-dessus pour tester la règle de nommage.
+            {/* Zone documents */}
+            {isDocumentsLoading ? (
+                <div className="rounded-[10px] border border-line bg-white p-8 text-center text-ink-2 text-[13px] flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-or-brun" />
+                    <span>Chargement des documents…</span>
                 </div>
-            </div>
+            ) : filteredDocuments.length === 0 ? (
+                <div className="rounded-[10px] border border-line bg-white p-8 text-center text-ink-3 text-[13px]">
+                    {documents.length === 0
+                        ? 'Aucun document classé dans ce dossier pour le moment.'
+                        : 'Aucun document ne correspond à votre recherche.'}
+                </div>
+            ) : (
+                <div className="rounded-[10px] border border-line bg-white overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-line-soft bg-naturel/60 text-[11.5px] font-bold uppercase tracking-wider text-ink-2 flex items-center justify-between">
+                        <span>Documents ({filteredDocuments.length})</span>
+                    </div>
+                    <div className="divide-y divide-line-soft">
+                        {filteredDocuments.map((doc) => (
+                            <div
+                                key={doc.id}
+                                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-sable/30 transition-colors"
+                            >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sable border border-contour/60 text-or-brun">
+                                        <FileText className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-semibold text-[13px] text-ebene truncate">
+                                                {doc.normalized_name}
+                                            </span>
+                                            <span className="rounded bg-ebene px-1.5 py-0.5 text-[10px] font-bold uppercase text-or-clair">
+                                                {doc.extension}
+                                            </span>
+                                            <span className="rounded-full bg-sable border border-contour/60 px-2 py-0.5 text-[10px] font-bold text-or-brun">
+                                                {doc.doc_type} · {doc.status_suffix}
+                                            </span>
+                                        </div>
+                                        <div className="text-[11.5px] text-ink-3 mt-0.5 flex items-center gap-2 flex-wrap">
+                                            <span>{formatFileSize(doc.size_bytes)}</span>
+                                            {doc.uploaded_by && (
+                                                <>
+                                                    <span>·</span>
+                                                    <span>Par {doc.uploaded_by.name}</span>
+                                                </>
+                                            )}
+                                            {doc.created_at && (
+                                                <>
+                                                    <span>·</span>
+                                                    <span>{formatDateTime(doc.created_at)}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {doc.can_download && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDownloadDocument(doc)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-sable hover:border-contour transition-colors"
+                                            title="Télécharger"
+                                        >
+                                            <Download className="h-3.5 w-3.5 text-or-brun" />
+                                            <span className="hidden sm:inline">Télécharger</span>
+                                        </button>
+                                    )}
+                                    {doc.can_delete && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onDeleteDocument(doc)}
+                                            className="rounded-lg p-1.5 text-ink-3 hover:bg-danger-bg hover:text-danger transition-colors"
+                                            title="Supprimer"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
