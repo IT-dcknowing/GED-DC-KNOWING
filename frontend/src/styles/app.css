@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+/*
+| Jetons de design GED DC-KNOWING.
+| Palette officielle : cahier des charges v1.1, section 12 (tons bois, ébène, or, beige).
+*/
+@theme {
+    --font-sans: 'Inter Variable', ui-sans-serif, system-ui, 'Segoe UI', Roboto, Arial, sans-serif;
+    --font-display: 'Manrope Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+    /* Palette officielle */
+    --color-ebene: #1a1a1a;
+    --color-or: #c9a227;
+    --color-or-brun: #9c7a12;
+    --color-sable: #fbf3da;
+    --color-naturel: #f4f1e8;
+    --color-contour: #d9c68a;
+    --color-or-clair: #e7c65a;
+
+    /* Textes et lignes (dérivés, contraste AA vérifié sur fond blanc pour ink, ink-2 et ink-3) */
+    --color-ink: #26231c;
+    --color-ink-2: #5c5547;
+    --color-ink-3: #736a59;
+    --color-line: #e7dcc0;
+    --color-line-soft: #f0e9d6;
+
+    /* États */
+    --color-danger: #a63d2f;
+    --color-danger-bg: #f8e9e5;
+    --color-ok: #3e7a4e;
+    --color-ok-bg: #e7f0e8;
+}
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-naturel font-sans text-ink antialiased;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        @apply font-display text-ebene;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-or;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.001s !important;
+            transition-duration: 0.001s !important;
+        }
+    }
+}
+
+/*
+| Texture bois très discrète des panneaux ébène (maquette : classe « wood »),
+| utilisée par la page de connexion et la barre latérale.
+*/
+@utility bg-wood {
+    background-color: var(--color-ebene);
+    background-image:
+        repeating-linear-gradient(93deg, rgba(231, 198, 90, 0.022) 0 2px, transparent 2px 9px),
+        repeating-linear-gradient(88deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 14px),
+        radial-gradient(1200px 500px at -10% -20%, rgba(201, 162, 39, 0.07), transparent 60%);
+}

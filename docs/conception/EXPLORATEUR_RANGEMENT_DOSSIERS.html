@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Explorateur GED DC-KNOWING — Maquette Interactive</title>
+    <!-- Tailwind CSS pour un rendu soigné -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .tree-line:before {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: #e2e8f0;
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col select-none overflow-hidden">
+
+    <!-- En-tête de l'application -->
+    <header class="bg-slate-900 text-white px-5 py-3 flex items-center justify-between shadow-md border-b border-slate-800 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 bg-amber-500 rounded-lg flex items-center justify-center text-slate-950 font-black text-lg shadow-inner">
+                DC
+            </div>
+            <div>
+                <h1 class="text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                    GED DC-KNOWING <span class="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-amber-500/30">Prototype Interactif</span>
+                </h1>
+                <p class="text-[11px] text-slate-400">Simulation de l'Explorateur & Guide de Classement Documentaire</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-slate-300">Rôle : <strong class="text-white">Collaborateur / Responsable</strong></span>
+            </div>
+            <button onclick="resetView()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-arrows-rotate text-[11px]"></i> Vue initiale
+            </button>
+        </div>
+    </header>
+
+    <!-- Barre d'outils type Explorateur Windows -->
+    <div class="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between text-xs shrink-0 shadow-sm">
+        <!-- Boutons d'actions -->
+        <div class="flex items-center space-x-2">
+            <button onclick="openUploadModal()" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3.5 py-1.5 rounded-md flex items-center gap-2 transition shadow-sm active:scale-95" id="btnUpload">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>Déposer un document ici</span>
+            </button>
+            <button onclick="openNewFolderModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-md flex items-center gap-2 transition border border-slate-300" id="btnNewFolder">
+                <i class="fa-solid fa-folder-plus text-amber-600"></i>
+                <span>Nouveau sous-dossier libre</span>
+            </button>
+            <div class="h-5 w-px bg-slate-200 mx-1"></div>
+            <span class="text-[11px] text-slate-500 flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-info text-blue-500"></i>
+                <span id="zoneRule">Sélectionnez un dossier pour tester</span>
+            </span>
+        </div>
+
+        <!-- Mode d'affichage -->
+        <div class="flex items-center space-x-1 text-slate-500">
+            <button class="p-1.5 rounded hover:bg-slate-100 text-slate-700"><i class="fa-solid fa-table-cells-large"></i></button>
+            <button class="p-1.5 rounded bg-slate-100 text-slate-900 font-bold"><i class="fa-solid fa-list-ul"></i></button>
+        </div>
+    </div>
+
+    <!-- Barre d'adresse / Fil d'Ariane -->
+    <div class="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex items-center space-x-2 text-xs shrink-0">
+        <button onclick="goBack()" class="p-1 rounded hover:bg-slate-200 text-slate-600 disabled:opacity-40" id="btnBack">
+            <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <button onclick="goUp()" class="p-1 rounded hover:bg-slate-200 text-slate-600" title="Dossier parent">
+            <i class="fa-solid fa-arrow-up"></i>
+        </button>
+        <div class="flex-1 bg-white border border-slate-300 rounded px-2.5 py-1 flex items-center gap-1.5 text-slate-700 font-mono text-[11px] overflow-x-auto shadow-inner" id="breadcrumbBar">
+            <i class="fa-solid fa-server text-slate-400"></i>
+            <span>/</span>
+            <span class="font-bold text-slate-900">01_CLIENTS</span>
+        </div>
+    </div>
+
+    <!-- Conteneur principal (2 colonnes comme Windows) -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Volet de Gauche : Arborescence / Structure Métier -->
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shrink-0 custom-scroll overflow-y-auto">
+            <div class="p-3 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-400 tracking-wider uppercase">
+                <span>Arborescence Métier</span>
+                <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">Règles CGA</span>
+            </div>
+
+            <!-- Liste des Espaces -->
+            <div class="p-2 space-y-0.5 text-xs text-slate-700 font-medium" id="treeNav">
+                <!-- Rempli par JavaScript -->
+            </div>
+
+            <!-- Légende d'aide -->
+            <div class="mt-auto p-3 m-2.5 rounded-lg bg-amber-50/70 border border-amber-200/60 text-[11px] text-amber-900 space-y-2">
+                <div class="font-bold flex items-center gap-1.5 text-amber-800">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Règles de Verrouillage</span>
+                </div>
+                <div class="space-y-1 text-slate-600">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-lock text-rose-500 w-3"></i>
+                        <span><strong>Dossier verrouillé :</strong> structure officielle imposée (inviolable).</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-folder-open text-amber-600 w-3"></i>
+                        <span><strong>Dossier de dépôt :</strong> zone où les fichiers sont classés.</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-user-gear text-emerald-600 w-3"></i>
+                        <span><strong>Sous-dossier libre :</strong> création autorisée (max 3 niveaux).</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Volet Central : Vue des Fichiers et Dossiers (Explorateur) -->
+        <main class="flex-1 bg-white flex flex-col overflow-hidden">
+            <!-- Barre d'info dossier en cours -->
+            <div class="p-4 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2" id="currentFolderTitle">
+                        <i class="fa-solid fa-folder text-amber-500"></i>
+                        <span>Dossier</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5" id="currentFolderDesc">Description des documents attendus dans cette rubrique.</p>
+                </div>
+
+                <div id="statusBadge" class="px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5">
+                    <!-- Statut dynamique -->
+                </div>
+            </div>
+
+            <!-- Zone de contenu (Tableau façon explorateur) -->
+            <div class="flex-1 overflow-y-auto custom-scroll p-4">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-slate-400 font-semibold uppercase text-[10px] tracking-wider pb-2">
+                            <th class="py-2 px-3">Nom</th>
+                            <th class="py-2 px-3">Type & Nature</th>
+                            <th class="py-2 px-3">Droit de dépôt</th>
+                            <th class="py-2 px-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="folderItemsTable" class="divide-y divide-slate-100">
+                        <!-- Rempli par JavaScript -->
+                    </tbody>
+                </table>
+
+                <!-- Zone vide si aucun élément -->
+                <div id="emptyZone" class="hidden text-center py-16">
+                    <div class="w-16 h-16 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-2xl mb-3">
+                        <i class="fa-regular fa-folder-open"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-700">Ce dossier est vide</p>
+                    <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Vous pouvez utiliser le bouton "Déposer un document" ou créer des sous-dossiers libres pour organiser ce classeur.</p>
+                </div>
+            </div>
+
+            <!-- Pied de page avec guide de nommage -->
+            <div class="p-3 bg-slate-900 text-white text-xs flex items-center justify-between border-t border-slate-800">
+                <div class="flex items-center gap-2 font-mono text-[11px] text-amber-400">
+                    <span class="text-slate-400">Standard de nommage automatique :</span>
+                    <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">AAAAMMJJ_CodeClient_TypeDoc_Objet_Statut.ext</span>
+                </div>
+                <div class="text-[11px] text-slate-400">
+                    <i class="fa-solid fa-check text-emerald-400 mr-1"></i> Respecte la charte de classement DC-KNOWING
+                </div>
+            </div>
+        </main>
+
+        <!-- Volet de Droite : Fiche Conseils "Où et Comment Ranger ?" -->
+        <aside class="w-80 bg-slate-50 border-l border-slate-200 p-4 flex flex-col shrink-0 custom-scroll overflow-y-auto">
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <i class="fa-solid fa-compass text-amber-600"></i>
+                <span>Guide de Rangement Rapide</span>
+            </h3>
+
+            <div class="space-y-3 text-xs">
+                <!-- Carte 1 -->
+                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="font-bold text-slate-800 flex items-center gap-1.5 text-amber-700">
+                        <i class="fa-solid fa-infinity"></i>
+                        <span>A_PERMANENT</span>
+                    </div>
+                    <p class="text-slate-600 text-[11px] mt-1">
+                        Pour tout document <strong>valable dans le temps</strong> : statuts, baux, contrats de prêt, fiches d'identification, conventions collectives.
+                    </p>
+                    <div class="mt-2 text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded">
+                        👉 <em>Ces pièces ne changent pas chaque année.</em>
+                    </div>
+                </div>
+
+                <!-- Carte 2 -->
+                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    <div class="font-bold text-slate-800 flex items-center gap-1.5 text-blue-700">
+                        <i class="fa-solid fa-calendar-days"></i>
+                        <span>B_EXERCICES (2024, 2025...)</span>
+                    </div>
+                    <p class="text-slate-600 text-[11px] mt-1">
+                        Pour toutes les pièces <strong>rattachées à une année fiscale précise</strong> :
+                    </p>
+                    <ul class="list-disc pl-4 mt-1 space-y-0.5 text-[11px] text-slate-600">
+                        <li><strong>1_PIECES_COMPTABLES :</strong> Factures clients/fournisseurs, relevés.</li>
+                        <li><strong>2_DECLARATIONS_FISCALES :</strong> TVA, IS, CFE.</li>
+                        <li><strong>3_SOCIAL_PAIE :</strong> Bulletins, charges sociales.</li>
+                        <li><strong>4_ETATS_FINANCIERS :</strong> Bilan, Grand Livre.</li>
+                    </ul>
+                </div>
+
+                <!-- Carte 3 : Précautions -->
+                <div class="bg-rose-50 border border-rose-200 p-3 rounded-lg text-rose-900">
+                    <div class="font-bold flex items-center gap-1.5">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                        <span>Ce qu'il ne faut PAS faire</span>
+                    </div>
+                    <ul class="list-disc pl-4 mt-1.5 space-y-1 text-[11px] text-rose-800">
+                        <li>Ne pas déposer de fichier à la racine de <code>01_CLIENTS</code>.</li>
+                        <li>Ne pas tenter de supprimer <code>A_PERMANENT</code> ou <code>B_EXERCICES</code>.</li>
+                        <li>Ne pas créer plus de 3 sous-dossiers libres en profondeur.</li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modale de Démonstration de Dépôt de Document -->
+    <div id="uploadModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200">
+            <div class="bg-slate-900 text-white px-5 py-3 flex justify-between items-center">
+                <h4 class="font-bold text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-amber-400"></i>
+                    <span>Déposer un document dans <span id="modalTargetFolder" class="font-mono text-amber-300">...</span></span>
+                </h4>
+                <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-5 space-y-4 text-xs">
+                <!-- Zone Glisser-Déposer -->
+                <div class="border-2 border-dashed border-amber-300 bg-amber-50/40 rounded-xl p-6 text-center hover:bg-amber-50/70 transition cursor-pointer">
+                    <i class="fa-solid fa-file-arrow-up text-3xl text-amber-600 mb-2"></i>
+                    <p class="font-semibold text-slate-800 text-sm">Glissez-déposez le fichier ici</p>
+                    <p class="text-slate-500 text-[11px] mt-1">PDF, Excel (.xlsx), Word (.docx) ou images scannées (max 50 Mo)</p>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Type documentaire (obligatoire)</label>
+                        <select class="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-amber-500">
+                            <option>Sélectionnez le type...</option>
+                            <option>Facture Achat</option>
+                            <option>Facture Vente</option>
+                            <option>Relevé Bancaire</option>
+                            <option>Statuts constitutifs</option>
+                            <option>Déclaration TVA (CA3)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Description / Objet du document</label>
+                        <input type="text" placeholder="Ex: Achat fournitures bureau janv 2024" class="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-amber-500">
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded p-2.5 text-[11px] text-slate-600">
+                    <strong class="text-slate-800">Nom final généré par la GED :</strong><br>
+                    <span class="font-mono text-amber-700 font-semibold" id="previewGeneratedName">20240115_CLI-0001_FACTURE_Fournitures_BROUILLON.pdf</span>
+                </div>
+            </div>
+            <div class="bg-slate-100 px-5 py-3 flex justify-end gap-2 border-t border-slate-200">
+                <button onclick="closeUploadModal()" class="px-3 py-1.5 rounded text-xs bg-white border border-slate-300 text-slate-700 font-medium hover:bg-slate-50">Annuler</button>
+                <button onclick="simulateUploadSuccess()" class="px-4 py-1.5 rounded text-xs bg-amber-600 text-white font-semibold hover:bg-amber-700 shadow-sm">Valider le dépôt</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale Nouveau Dossier Libre -->
+    <div id="newFolderModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-200">
+            <div class="bg-slate-900 text-white px-4 py-2.5 flex justify-between items-center text-xs font-bold">
+                <span>Créer un sous-dossier libre</span>
+                <button onclick="closeNewFolderModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-4 space-y-3 text-xs">
+                <p class="text-slate-600 text-[11px]">Vous pouvez créer un dossier personnalisé dans cette rubrique (ex: par fournisseur, par banque, par trimestre) :</p>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nom du dossier</label>
+                    <input type="text" id="newFolderNameInput" placeholder="Ex: Fournisseurs_Etrangers" class="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div class="bg-slate-100 px-4 py-2.5 flex justify-end gap-2 border-t border-slate-200">
+                <button onclick="closeNewFolderModal()" class="px-3 py-1 rounded text-xs bg-white border border-slate-300 text-slate-700">Annuler</button>
+                <button onclick="simulateCreateFolder()" class="px-3 py-1 rounded text-xs bg-amber-600 text-white font-semibold hover:bg-amber-700">Créer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de simulation de navigation -->
+    <script>
+        // Structure de données de l'arbre documentaire
+        const fileSystem = {
+            id: 'root',
+            name: 'GED DC-KNOWING',
+            path: '/',
+            children: [
+                {
+                    id: '00_dir',
+                    name: '00_DIRECTION',
+                    path: '/00_DIRECTION',
+                    nature: 'root_space',
+                    locked: true,
+                    restricted: true,
+                    canUpload: false,
+                    desc: 'Espace ultra-sécurisé réservé à la Direction et aux Associés du cabinet.',
+                    children: [
+                        { id: 'dir_1', name: 'Comptes_Cabinet', path: '/00_DIRECTION/Comptes_Cabinet', nature: 'section_folder', locked: true, canUpload: true, desc: 'Pièces financières internes du cabinet.', files: ['Bilan_DC_Knowing_2025.pdf'] },
+                        { id: 'dir_2', name: 'Strategie_Associes', path: '/00_DIRECTION/Strategie_Associes', nature: 'section_folder', locked: true, canUpload: true, desc: 'Procès-verbaux et pactes des associés.', files: ['PV_Assemblee_2026.pdf'] }
+                    ]
+                },
+                {
+                    id: '01_cli',
+                    name: '01_CLIENTS',
+                    path: '/01_CLIENTS',
+                    nature: 'root_space',
+                    locked: true,
+                    canUpload: false,
+                    desc: 'Répertoire principal des dossiers clients du cabinet.',
+                    children: [
+                        {
+                            id: 'cli_0001',
+                            name: 'CLI-0001 · ALPHA TRADING SARL',
+                            path: '/01_CLIENTS/CLI-0001',
+                            nature: 'client_root',
+                            locked: true,
+                            canUpload: false,
+                            desc: 'Dossier principal du client ALPHA TRADING SARL (code CLI-0001).',
+                            children: [
+                                {
+                                    id: 'cli_0001_perm',
+                                    name: 'A_PERMANENT',
+                                    path: '/01_CLIENTS/CLI-0001/A_PERMANENT',
+                                    nature: 'permanent_folder',
+                                    locked: true,
+                                    canUpload: false,
+                                    desc: 'Dossier permanent : conserve tous les actes et documents stables de l\'entreprise.',
+                                    children: [
+                                        { id: 'perm_a1', name: 'A1_JURIDIQUE_CONSTITUTION', path: '/01_CLIENTS/CLI-0001/A_PERMANENT/A1_JURIDIQUE_CONSTITUTION', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Statuts certifiés, RCCM, DFE, annonces légales, PV d\'AG constitutive.', files: ['Statuts_Signes_2020.pdf', 'Extrait_RCCM_AlphaTrading.pdf'] },
+                                        { id: 'perm_a2', name: 'A2_CONTRATS_ENGAGEMENTS', path: '/01_CLIENTS/CLI-0001/A_PERMANENT/A2_CONTRATS_ENGAGEMENTS', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Baux commerciaux, contrats de prêts bancaires, polices d\'assurances.', files: ['Bail_Commercial_Siege.pdf'] },
+                                        { id: 'perm_a3', name: 'A3_FISCAL_SOCIAL_STRUCTUREL', path: '/01_CLIENTS/CLI-0001/A_PERMANENT/A3_FISCAL_SOCIAL_STRUCTUREL', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Option fiscale, immatriculation sociale, convention collective applicable.', files: ['Attestation_Regime_Reel.pdf'] },
+                                        { id: 'perm_a4', name: 'A4_CORRESPONDANCES_ET_NOTES', path: '/01_CLIENTS/CLI-0001/A_PERMANENT/A4_CORRESPONDANCES_ET_NOTES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Lettre de mission signée, fiche d\'acceptation client, notes stratégiques.', files: ['Lettre_de_Mission_DC_KNOWING.pdf'] }
+                                    ]
+                                },
+                                {
+                                    id: 'cli_0001_exec',
+                                    name: 'B_EXERCICES',
+                                    path: '/01_CLIENTS/CLI-0001/B_EXERCICES',
+                                    nature: 'exercise_folder',
+                                    locked: true,
+                                    canUpload: false,
+                                    desc: 'Dossiers des exercices comptables annuels.',
+                                    children: [
+                                        {
+                                            id: 'exec_2024',
+                                            name: '2024',
+                                            path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024',
+                                            nature: 'exercise_year',
+                                            locked: true,
+                                            canUpload: false,
+                                            desc: 'Exercice comptable et fiscal clos au 31/12/2024.',
+                                            children: [
+                                                { id: 'ex_1', name: '1_PIECES_COMPTABLES', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/1_PIECES_COMPTABLES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Factures d\'achat, factures de vente, relevés de compte bancaire, caisse.', files: ['Factures_Achats_T1.pdf', 'Releve_Bancaire_Janvier_2024.pdf'] },
+                                                { id: 'ex_2', name: '2_DECLARATIONS_FISCALES', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/2_DECLARATIONS_FISCALES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Déclarations mensuelles ou trimestrielles de TVA, acomptes IS, taxes diverses.', files: ['Declaration_TVA_CA3_01_2024.pdf'] },
+                                                { id: 'ex_3', name: '3_SOCIAL_PAIE', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/3_SOCIAL_PAIE', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Livre de paie, états récapitulatifs des salaires, déclarations de charges sociales.', files: ['Recapitulatif_Salaires_2024.xlsx'] },
+                                                { id: 'ex_4', name: '4_ETATS_FINANCIERS_BILAN', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/4_ETATS_FINANCIERS_BILAN', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Balance définitive, Grand Livre général, plaquette de Bilan et Compte de Résultat.', files: ['Bilan_Provisoire_2024.pdf'] },
+                                                { id: 'ex_5', name: '5_JURIDIQUE_ANNUEL', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/5_JURIDIQUE_ANNUEL', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Rapport de gestion annuel, PV de l\'Assemblée Générale d\'approbation des comptes.', files: [] },
+                                                { id: 'ex_6', name: '6_CONTROLES_ET_REVISIONS', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/6_CONTROLES_ET_REVISIONS', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Dossier de révision, cadrages de TVA, rapprochements bancaires, inventaires.', files: ['Cadrage_TVA_2024.xlsx'] },
+                                                { id: 'ex_7', name: '7_COURRIERS_HONORAIRES', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2024/7_COURRIERS_HONORAIRES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Notes d\'honoraires du cabinet, courriers de relance, attestations délivrées.', files: ['Note_Honoraires_Cloture.pdf'] }
+                                            ]
+                                        },
+                                        {
+                                            id: 'exec_2025',
+                                            name: '2025',
+                                            path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2025',
+                                            nature: 'exercise_year',
+                                            locked: true,
+                                            canUpload: false,
+                                            desc: 'Exercice comptable en cours (2025).',
+                                            children: [
+                                                { id: 'ex25_1', name: '1_PIECES_COMPTABLES', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2025/1_PIECES_COMPTABLES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Pièces comptables de l\'exercice 2025.', files: [] },
+                                                { id: 'ex25_2', name: '2_DECLARATIONS_FISCALES', path: '/01_CLIENTS/CLI-0001/B_EXERCICES/2025/2_DECLARATIONS_FISCALES', nature: 'section_folder', locked: true, canUpload: true, canCreateSubfolder: true, desc: 'Déclarations fiscales 2025.', files: [] }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            id: 'cli_0002',
+                            name: 'CLI-0002 · BETA CONSULTING',
+                            path: '/01_CLIENTS/CLI-0002',
+                            nature: 'client_root',
+                            locked: true,
+                            canUpload: false,
+                            desc: 'Dossier du client BETA CONSULTING.',
+                            children: [
+                                { id: 'c2_perm', name: 'A_PERMANENT', path: '/01_CLIENTS/CLI-0002/A_PERMANENT', nature: 'permanent_folder', locked: true, canUpload: false, children: [] },
+                                { id: 'c2_exec', name: 'B_EXERCICES', path: '/01_CLIENTS/CLI-0002/B_EXERCICES', nature: 'exercise_folder', locked: true, canUpload: false, children: [] }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    id: '02_cpt',
+                    name: '02_COMPTABILITE_FISCALITE',
+                    path: '/02_COMPTABILITE_FISCALITE',
+                    nature: 'root_space',
+                    locked: true,
+                    canUpload: false,
+                    desc: 'Espace transversal : documentation fiscale, modèles de bilans et veille comptable.',
+                    children: [
+                        { id: 'cpt_1', name: 'Modeles_Liasse_Fiscale', path: '/02_COMPTABILITE_FISCALITE/Modeles_Liasse_Fiscale', nature: 'section_folder', locked: true, canUpload: true, desc: 'Modèles officiels CERFA et CGA.', files: ['Plaquette_Type_CGA_2025.xlsx'] }
+                    ]
+                },
+                {
+                    id: '03_rh',
+                    name: '03_SOCIAL_RH_CABINET',
+                    path: '/03_SOCIAL_RH_CABINET',
+                    nature: 'root_space',
+                    locked: true,
+                    restricted: true,
+                    canUpload: false,
+                    desc: 'Espace interne du cabinet pour les collaborateurs, contrats et paie interne.',
+                    children: []
+                },
+                {
+                    id: '04_jur',
+                    name: '04_JURIDIQUE_CONSEIL',
+                    path: '/04_JURIDIQUE_CONSEIL',
+                    nature: 'root_space',
+                    locked: true,
+                    canUpload: false,
+                    desc: 'Modèles de statuts, modèles de contrats et baux types.',
+                    children: []
+                },
+                {
+                    id: '99_arc',
+                    name: '99_ARCHIVES',
+                    path: '/99_ARCHIVES',
+                    nature: 'root_space',
+                    locked: true,
+                    canUpload: false,
+                    desc: 'Clients radiés et exercices comptables clôturés et verrouillés.',
+                    children: []
+                }
+            ]
+        };
+
+        let currentFolder = fileSystem.children[1].children[0]; // Démarre sur CLI-0001
+        let historyStack = [];
+
+        // Rendu de l'arbre à gauche
+        function renderTree(folder, container, level = 0) {
+            const item = document.createElement('div');
+            item.className = `flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer transition ${currentFolder.id === folder.id ? 'bg-amber-100 text-amber-900 font-bold' : 'hover:bg-slate-100 text-slate-700'}`;
+            item.style.paddingLeft = `${level * 14 + 8}px`;
+
+            let icon = 'fa-folder text-amber-500';
+            if (folder.restricted) icon = 'fa-folder-lock text-rose-500';
+            if (folder.locked && !folder.restricted) icon = 'fa-folder text-amber-600';
+
+            item.innerHTML = `
+                <i class="fa-solid ${icon} text-[13px] w-4"></i>
+                <span class="truncate flex-1">${folder.name}</span>
+                ${folder.locked ? '<i class="fa-solid fa-lock text-[9px] text-slate-400" title="Verrouillé"></i>' : ''}
+            `;
+
+            item.onclick = (e) => {
+                e.stopPropagation();
+                navigateTo(folder);
+            };
+
+            container.appendChild(item);
+
+            if (folder.children && folder.children.length > 0) {
+                folder.children.forEach(child => renderTree(child, container, level + 1));
+            }
+        }
+
+        // Navigation
+        function navigateTo(folder) {
+            if (currentFolder.id !== folder.id) {
+                historyStack.push(currentFolder);
+            }
+            currentFolder = folder;
+            updateUI();
+        }
+
+        function goBack() {
+            if (historyStack.length > 0) {
+                currentFolder = historyStack.pop();
+                updateUI();
+            }
+        }
+
+        function findParent(root, target) {
+            if (!root.children) return null;
+            for (let child of root.children) {
+                if (child.id === target.id) return root;
+                let found = findParent(child, target);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        function goUp() {
+            let parent = findParent(fileSystem, currentFolder);
+            if (parent && parent.id !== 'root') {
+                navigateTo(parent);
+            }
+        }
+
+        function resetView() {
+            currentFolder = fileSystem.children[1].children[0];
+            historyStack = [];
+            updateUI();
+        }
+
+        // Mise à jour complète de l'interface
+        function updateUI() {
+            // Arbre
+            const treeContainer = document.getElementById('treeNav');
+            treeContainer.innerHTML = '';
+            fileSystem.children.forEach(rootChild => renderTree(rootChild, treeContainer, 0));
+
+            // Breadcrumb
+            document.getElementById('breadcrumbBar').innerHTML = `
+                <i class="fa-solid fa-server text-slate-400"></i>
+                <span class="text-slate-400">/</span>
+                ${currentFolder.path.split('/').filter(Boolean).map((part, idx, arr) => `
+                    <span class="${idx === arr.length - 1 ? 'font-bold text-slate-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200' : 'text-slate-600'}">${part}</span>
+                    ${idx < arr.length - 1 ? '<span class="text-slate-300">/</span>' : ''}
+                `).join('')}
+            `;
+
+            // En-tête Dossier
+            document.getElementById('currentFolderTitle').innerHTML = `
+                <i class="fa-solid ${currentFolder.restricted ? 'fa-folder-lock text-rose-500' : 'fa-folder text-amber-500'}"></i>
+                <span>${currentFolder.name}</span>
+            `;
+            document.getElementById('currentFolderDesc').textContent = currentFolder.desc || 'Dossier documentaire GED.';
+
+            // Bouton Retour
+            document.getElementById('btnBack').disabled = historyStack.length === 0;
+
+            // Statut Badge
+            const badge = document.getElementById('statusBadge');
+            if (currentFolder.canUpload) {
+                badge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5';
+                badge.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-600"></i> Zone de Dépôt Autorisée';
+            } else {
+                badge.className = 'px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5';
+                badge.innerHTML = '<i class="fa-solid fa-folder-tree text-amber-700"></i> Dossier Structurel (Navigation Seule)';
+            }
+
+            // Boutons d'actions toujours actifs pour le test
+            const btnUpload = document.getElementById('btnUpload');
+            const btnNewFolder = document.getElementById('btnNewFolder');
+            const zoneRule = document.getElementById('zoneRule');
+
+            btnUpload.disabled = false;
+            btnUpload.classList.remove('opacity-40', 'cursor-not-allowed');
+
+            btnNewFolder.disabled = false;
+            btnNewFolder.classList.remove('opacity-40', 'cursor-not-allowed');
+
+            if (currentFolder.canUpload) {
+                zoneRule.textContent = 'Dossier terminal : dépôt direct de documents recommandé.';
+            } else {
+                zoneRule.textContent = 'Dossier structurel : dépôt ou sous-dossier libre possible pour tester.';
+            }
+
+            // Table de contenu
+            const tbody = document.getElementById('folderItemsTable');
+            const emptyZone = document.getElementById('emptyZone');
+            tbody.innerHTML = '';
+
+            let hasContent = false;
+
+            // 1. Les Sous-dossiers
+            if (currentFolder.children && currentFolder.children.length > 0) {
+                hasContent = true;
+                currentFolder.children.forEach(sub => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-slate-50 cursor-pointer group transition';
+                    tr.onclick = () => navigateTo(sub);
+
+                    tr.innerHTML = `
+                        <td class="py-2.5 px-3 flex items-center gap-2.5 font-semibold text-slate-800">
+                            <i class="fa-solid fa-folder text-amber-500 text-base group-hover:scale-110 transition-transform"></i>
+                            <span class="group-hover:text-amber-700">${sub.name}</span>
+                            ${sub.locked ? '<span class="text-[9px] bg-slate-100 text-slate-500 px-1 rounded border border-slate-200">Verrouillé</span>' : '<span class="text-[9px] bg-emerald-50 text-emerald-700 px-1 rounded border border-emerald-200">Libre</span>'}
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-500 font-mono text-[11px]">${sub.nature || 'Dossier'}</td>
+                        <td class="py-2.5 px-3">
+                            ${sub.canUpload ? '<span class="text-emerald-700 font-semibold flex items-center gap-1"><i class="fa-solid fa-check text-[10px]"></i> Oui</span>' : '<span class="text-slate-400">Non (Structure)</span>'}
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-400 text-right">
+                            <i class="fa-solid fa-chevron-right text-[10px] group-hover:translate-x-1 transition-transform"></i>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // 2. Les Fichiers
+            if (currentFolder.files && currentFolder.files.length > 0) {
+                hasContent = true;
+                currentFolder.files.forEach(fileName => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-amber-50/40 transition';
+
+                    let ext = fileName.split('.').pop().toLowerCase();
+                    let fileIcon = 'fa-file-pdf text-rose-500';
+                    if (ext === 'xlsx' || ext === 'xls') fileIcon = 'fa-file-excel text-emerald-600';
+                    if (ext === 'docx' || ext === 'doc') fileIcon = 'fa-file-word text-blue-600';
+
+                    tr.innerHTML = `
+                        <td class="py-2.5 px-3 flex items-center gap-2.5 font-mono text-slate-900 font-medium">
+                            <i class="fa-solid ${fileIcon} text-base"></i>
+                            <span>${fileName}</span>
+                            <span class="text-[10px] bg-emerald-100 text-emerald-800 font-sans px-1.5 py-0.2 rounded font-semibold">Validé</span>
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-500 uppercase text-[11px]">Document classé</td>
+                        <td class="py-2.5 px-3 text-slate-600">Lecture / Téléchargement</td>
+                        <td class="py-2.5 px-3 text-right">
+                            <button onclick="event.stopPropagation(); alert('Téléchargement sécurisé de : ' + '${fileName}')" class="px-2 py-1 text-slate-600 hover:text-amber-700 hover:bg-white rounded border border-transparent hover:border-slate-300">
+                                <i class="fa-solid fa-download"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            if (!hasContent) {
+                emptyZone.classList.remove('hidden');
+            } else {
+                emptyZone.classList.add('hidden');
+            }
+        }
+
+        // Modales
+        function openUploadModal() {
+            document.getElementById('modalTargetFolder').textContent = currentFolder.name;
+            document.getElementById('uploadModal').classList.remove('hidden');
+            document.getElementById('uploadModal').classList.add('flex');
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.add('hidden');
+            document.getElementById('uploadModal').classList.remove('flex');
+        }
+
+        function simulateUploadSuccess() {
+            if (!currentFolder.files) currentFolder.files = [];
+            currentFolder.files.push('20240115_CLI-0001_FACTURE_Nouvelle_Piece.pdf');
+            closeUploadModal();
+            updateUI();
+            alert('Document déposé et renommé automatiquement avec succès dans ' + currentFolder.name + ' !');
+        }
+
+        function openNewFolderModal() {
+            document.getElementById('newFolderModal').classList.remove('hidden');
+            document.getElementById('newFolderModal').classList.add('flex');
+        }
+
+        function closeNewFolderModal() {
+            document.getElementById('newFolderModal').classList.add('hidden');
+            document.getElementById('newFolderModal').classList.remove('flex');
+        }
+
+        function simulateCreateFolder() {
+            const name = document.getElementById('newFolderNameInput').value.trim();
+            if (!name) return;
+            if (!currentFolder.children) currentFolder.children = [];
+            
+            currentFolder.children.push({
+                id: 'custom_' + Date.now(),
+                name: name,
+                path: currentFolder.path + '/' + name,
+                nature: 'custom_folder',
+                locked: false,
+                canUpload: true,
+                canCreateSubfolder: true,
+                desc: 'Sous-dossier libre créé par le collaborateur.',
+                files: []
+            });
+
+            document.getElementById('newFolderNameInput').value = '';
+            closeNewFolderModal();
+            updateUI();
+        }
+
+        // Lancement initial
+        updateUI();
+    </script>
+</body>
+</html>

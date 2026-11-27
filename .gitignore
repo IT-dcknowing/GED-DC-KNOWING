@@ -1,0 +1,35 @@
+*.log
+.DS_Store
+.env
+.env.backup
+.env.production
+# Toute autre variante de .env peut contenir des secrets ; seul le modèle est versionné.
+.env.*
+!.env.example
+
+# Postman : copies locales contenant des valeurs personnelles, variables globales, rapports d'exécution
+*.local.postman_environment.json
+*.postman_globals.json
+/docs/postman/reports/
+.phpactor.json
+.phpunit.result.cache
+/.codex
+/.cursor/
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+/auth.json
+/node_modules
+/public/build
+/public/fonts-manifest.dev.json
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/vendor
+_ide_helper.php
+Homestead.json
+Homestead.yaml
+Thumbs.db
